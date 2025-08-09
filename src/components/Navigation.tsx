@@ -9,10 +9,11 @@ interface NavigationProps {
   onJoinClick: () => void;
   onCommunityClick: () => void;
   onAboutClick: () => void;
+  onEditProfileClick: () => void;
   user?: any;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ onCreateEventClick, onSignInClick, onJoinClick, onCommunityClick, onAboutClick, user }) => {
+const Navigation: React.FC<NavigationProps> = ({ onCreateEventClick, onSignInClick, onJoinClick, onCommunityClick, onAboutClick, onEditProfileClick, user }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -90,13 +91,13 @@ const Navigation: React.FC<NavigationProps> = ({ onCreateEventClick, onSignInCli
           <div className="flex items-center space-x-4">
             {user ? (
               <div className="hidden md:flex items-center space-x-4">
-                <Link
-                  to="/profile"
+                <button
+                  onClick={onEditProfileClick}
                   className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors duration-200 bg-gray-800/50 hover:bg-gray-700/50 px-3 py-2 rounded-lg border border-gray-700 hover:border-purple-500/30"
                 >
                   <User size={18} />
-                  <span>Profile</span>
-                </Link>
+                  <span>Edit Profile</span>
+                </button>
                 <button
                   onClick={handleSignOut}
                   className="flex items-center space-x-2 text-gray-300 hover:text-red-400 transition-colors duration-200 bg-gray-800/50 hover:bg-red-900/20 px-3 py-2 rounded-lg border border-gray-700 hover:border-red-500/30"

@@ -7,6 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+interface ApproveRequestBody {
+  requestId: number
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -14,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    // Create Supabase client
+    // Create Supabase client with service role for transaction safety
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -25,7 +29,19 @@ serve(async (req) => {
       }
     )
 
-    // Get the current user
+    // Also create a service role client for critical operations
+    const supabaseServiceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+
+    // Get the current user from the regular client
     const {
       data: { user },
       error: userError,
@@ -42,11 +58,11 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { requestId } = await req.json()
+    const { requestId }: ApproveRequestBody = await req.json()
 
-    if (!requestId) {
+    if (!requestId || typeof requestId !== 'number') {
       return new Response(
-        JSON.stringify({ error: 'Request ID is required' }),
+        JSON.stringify({ error: 'Valid Request ID is required' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -59,18 +75,32 @@ serve(async (req) => {
       .from('join_requests')
       .select(`
         *,
-        events!inner(id, user_id, capacity, title)
+        events!inner(
+          id, 
+          user_id, 
+          capacity, 
+          title,
+          date,
+          time
+        )
       `)
       .eq('id', requestId)
       .single()
 
-    if (requestError) {
-      throw requestError
+    if (requestError || !joinRequest) {
+      return new Response(
+        JSON.stringify({ error: 'Join request not found' }),
+        { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
-    if (!joinRequest || joinRequest.events.user_id !== user.id) {
+    // Verify user is the event host
+    if (joinRequest.events.user_id !== user.id) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized: You can only approve requests for your own events' }),
+        JSON.stringify({ error: 'Forbidden: You can only approve requests for your own events' }),
         { 
           status: 403, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -78,6 +108,7 @@ serve(async (req) => {
       )
     }
 
+    // Check if request is still pending
     if (joinRequest.status !== 'pending') {
       return new Response(
         JSON.stringify({ error: `Request is already ${joinRequest.status}` }),
@@ -88,24 +119,11 @@ serve(async (req) => {
       )
     }
 
-    // Check current attendee count
-    const { count: currentAttendees, error: countError } = await supabaseClient
-      .from('event_attendees')
-      .select('*', { count: 'exact', head: true })
-      .eq('event_id', joinRequest.event_id)
-
-    if (countError) {
-      throw countError
-    }
-
-    // Check if capacity would be exceeded
-    if (currentAttendees >= joinRequest.events.capacity) {
+    // Check if event is still in the future
+    const eventDateTime = new Date(`${joinRequest.events.date}T${joinRequest.events.time}`)
+    if (eventDateTime <= new Date()) {
       return new Response(
-        JSON.stringify({ 
-          error: 'Event is at full capacity',
-          capacity: joinRequest.events.capacity,
-          currentAttendees 
-        }),
+        JSON.stringify({ error: 'Cannot approve requests for past events' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -113,32 +131,47 @@ serve(async (req) => {
       )
     }
 
-    // Start transaction: approve request and add to attendees
-    const { error: approveError } = await supabaseClient
-      .from('join_requests')
-      .update({ status: 'approved' })
-      .eq('id', requestId)
-
-    if (approveError) {
-      throw approveError
-    }
-
-    // Add user to event attendees
-    const { error: attendeeError } = await supabaseClient
-      .from('event_attendees')
-      .insert({
-        event_id: joinRequest.event_id,
-        user_id: joinRequest.requester_id
+    // Execute transaction with row-level locking for concurrency safety
+    const { data: transactionResult, error: transactionError } = await supabaseServiceClient
+      .rpc('approve_join_request_transaction', {
+        p_request_id: requestId,
+        p_event_id: joinRequest.event_id,
+        p_requester_id: joinRequest.requester_id,
+        p_event_capacity: joinRequest.events.capacity
       })
 
-    if (attendeeError) {
-      // Rollback the approval if adding attendee fails
-      await supabaseClient
-        .from('join_requests')
-        .update({ status: 'pending' })
-        .eq('id', requestId)
+    if (transactionError) {
+      console.error('Transaction error:', transactionError)
       
-      throw attendeeError
+      // Handle specific error cases
+      if (transactionError.message?.includes('capacity_exceeded')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Event is at full capacity',
+            capacity: joinRequest.events.capacity,
+            code: 'CAPACITY_EXCEEDED'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      if (transactionError.message?.includes('already_attending')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'User is already attending this event',
+            code: 'ALREADY_ATTENDING'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      throw transactionError
     }
 
     return new Response(
@@ -146,8 +179,11 @@ serve(async (req) => {
         success: true, 
         message: 'Join request approved successfully',
         eventTitle: joinRequest.events.title,
-        newAttendeeCount: currentAttendees + 1,
-        capacity: joinRequest.events.capacity
+        newAttendeeCount: transactionResult.new_attendee_count,
+        capacity: joinRequest.events.capacity,
+        requester: {
+          id: joinRequest.requester_id
+        }
       }),
       { 
         status: 200, 
@@ -158,7 +194,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in join-approve function:', error)
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ 
+        error: error.message || 'Internal server error',
+        code: 'INTERNAL_ERROR'
+      }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

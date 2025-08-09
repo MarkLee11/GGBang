@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
@@ -6,15 +6,18 @@ import Hero from './components/Hero';
 import EventGrid from './components/EventGrid';
 import UserProfile from './components/UserProfile';
 import CreateEventModal from './components/CreateEventModal';
+import EditProfileModal from './components/EditProfileModal';
 import SignupModal from './components/SignupModal';
 import SignInModal from './components/SignInModal';
 import CommunityModal from './components/CommunityModal';
 import AboutModal from './components/AboutModal';
 import { useRef } from 'react';
 import { authService } from './lib/auth';
+import { isSupabaseConfigured } from './lib/supabase';
 
 function App() {
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const [isCommunityModalOpen, setIsCommunityModalOpen] = useState(false);
@@ -46,6 +49,10 @@ function App() {
 
   const handleCreateEventClick = () => {
     setIsCreateEventModalOpen(true);
+  };
+
+  const handleEditProfileClick = () => {
+    setIsEditProfileModalOpen(true);
   };
 
   const handleCloseCreateEventModal = () => {
@@ -125,12 +132,23 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black">
+      {/* Development Mode Banner */}
+      {!isSupabaseConfigured && (
+        <div className="bg-yellow-900/50 border-b border-yellow-800 py-2 px-4 text-center">
+          <p className="text-yellow-200 text-sm">
+            <strong>Demo Mode:</strong> Running with sample data. 
+            <span className="ml-2">Configure Supabase to connect to a real database.</span>
+          </p>
+        </div>
+      )}
+      
       <Navigation 
         onCreateEventClick={handleCreateEventClick} 
         onSignInClick={handleSignInClick} 
         onJoinClick={handleJoinClick} 
         onCommunityClick={handleCommunityClick}
         onAboutClick={handleAboutClick}
+        onEditProfileClick={handleEditProfileClick}
         user={user} 
       />
       
@@ -197,6 +215,16 @@ function App() {
         isOpen={isCreateEventModalOpen}
         onClose={handleCloseCreateEventModal}
         onEventCreated={handleEventCreated}
+      />
+
+      <EditProfileModal
+        isOpen={isEditProfileModalOpen}
+        onClose={() => setIsEditProfileModalOpen(false)}
+        user={user}
+        onProfileUpdated={() => {
+          // Optionally refetch user data or refresh components
+          console.log('Profile updated successfully');
+        }}
       />
       
       <SignupModal 

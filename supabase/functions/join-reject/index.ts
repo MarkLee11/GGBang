@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+interface RejectRequestBody {
+  requestId: number
+  note?: string
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -25,6 +30,18 @@ serve(async (req) => {
       }
     )
 
+    // Also create a service role client for transaction operations
+    const supabaseServiceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+
     // Get the current user
     const {
       data: { user },
@@ -33,7 +50,10 @@ serve(async (req) => {
 
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ 
+          error: 'Unauthorized: Authentication required',
+          code: 'UNAUTHORIZED'
+        }),
         { 
           status: 401, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -42,11 +62,14 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { requestId, note } = await req.json()
+    const { requestId, note }: RejectRequestBody = await req.json()
 
-    if (!requestId) {
+    if (!requestId || typeof requestId !== 'number') {
       return new Response(
-        JSON.stringify({ error: 'Request ID is required' }),
+        JSON.stringify({ 
+          error: 'Valid Request ID is required',
+          code: 'INVALID_REQUEST_ID'
+        }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -59,18 +82,37 @@ serve(async (req) => {
       .from('join_requests')
       .select(`
         *,
-        events!inner(id, user_id, title)
+        events!inner(
+          id, 
+          user_id, 
+          title,
+          date,
+          time
+        )
       `)
       .eq('id', requestId)
       .single()
 
-    if (requestError) {
-      throw requestError
+    if (requestError || !joinRequest) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Join request not found',
+          code: 'REQUEST_NOT_FOUND'
+        }),
+        { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
-    if (!joinRequest || joinRequest.events.user_id !== user.id) {
+    // 仅主办方可以拒绝申请
+    if (joinRequest.events.user_id !== user.id) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized: You can only reject requests for your own events' }),
+        JSON.stringify({ 
+          error: 'Forbidden: You can only reject requests for your own events',
+          code: 'FORBIDDEN'
+        }),
         { 
           status: 403, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -78,9 +120,14 @@ serve(async (req) => {
       )
     }
 
+    // 检查申请状态
     if (joinRequest.status !== 'pending') {
       return new Response(
-        JSON.stringify({ error: `Request is already ${joinRequest.status}` }),
+        JSON.stringify({ 
+          error: `Request is already ${joinRequest.status}`,
+          code: 'REQUEST_NOT_PENDING',
+          currentStatus: joinRequest.status
+        }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -88,25 +135,60 @@ serve(async (req) => {
       )
     }
 
-    // Update request status to rejected
-    const { error: rejectError } = await supabaseClient
-      .from('join_requests')
-      .update({ 
-        status: 'rejected',
-        // Optionally store rejection note in message field or create a separate field
-        ...(note && { rejection_note: note })
-      })
-      .eq('id', requestId)
+    // 检查事件是否还在未来（可选，主办方可能想要拒绝过期的申请）
+    const eventDateTime = new Date(`${joinRequest.events.date}T${joinRequest.events.time}`)
+    const now = new Date()
 
-    if (rejectError) {
-      throw rejectError
+    // 使用事务安全的拒绝函数
+    const { data: transactionResult, error: transactionError } = await supabaseServiceClient
+      .rpc('reject_join_request_transaction', {
+        p_request_id: requestId,
+        p_rejection_note: note || null
+      })
+
+    if (transactionError) {
+      console.error('Transaction error:', transactionError)
+      
+      if (transactionError.message?.includes('request_not_found')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Join request not found',
+            code: 'REQUEST_NOT_FOUND'
+          }),
+          { 
+            status: 404, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      if (transactionError.message?.includes('request_not_pending')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Request is not in pending status',
+            code: 'REQUEST_NOT_PENDING'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      throw transactionError
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Join request rejected successfully',
-        eventTitle: joinRequest.events.title
+        eventTitle: joinRequest.events.title,
+        requester: {
+          id: joinRequest.requester_id
+        },
+        rejectionNote: note || null,
+        rejectedAt: new Date().toISOString(),
+        isPastEvent: eventDateTime <= now
       }),
       { 
         status: 200, 
@@ -117,7 +199,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in join-reject function:', error)
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ 
+        error: error.message || 'Internal server error',
+        code: 'INTERNAL_ERROR'
+      }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

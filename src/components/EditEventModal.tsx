@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, MapPin, User, Tag, FileText, Upload, Image as ImageIcon } from 'lucide-react';
 import { supabase, type Event } from '../lib/supabase';
+import { convertLocalToUTC, isEventInFuture } from '../utils/dateUtils';
 
 interface EditEventModalProps {
   isOpen: boolean;
@@ -104,6 +105,13 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onEven
     setSubmitError(null);
 
     try {
+      // Validate that event is not in the past (using local time)
+      if (!isEventInFuture(formData.date, formData.time)) {
+        throw new Error('Event date and time must be in the future');
+      }
+
+      // Convert local time to UTC for storage
+      const { date: utcDate, time: utcTime } = convertLocalToUTC(formData.date, formData.time);
       let imageUrl = formData.currentImageUrl;
 
       // Upload new image if provided
@@ -134,8 +142,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onEven
         .update({
           title: formData.title,
           description: formData.description || null,
-          date: formData.date,
-          time: formData.time,
+          date: utcDate,  // Store UTC date
+          time: utcTime,  // Store UTC time
           location: formData.location,
           country: formData.country,
           organizer: formData.organizer,
@@ -254,6 +262,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onEven
                   name="date"
                   value={formData.date}
                   onChange={handleInputChange}
+                  min={new Date().toISOString().split('T')[0]}
                   required
                   className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 />

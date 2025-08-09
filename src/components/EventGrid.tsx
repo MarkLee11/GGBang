@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle } from 'react';
+import { forwardRef, useImperativeHandle } from 'react';
 import { useState } from 'react';
 import EventCard from './EventCard';
 import CategoryFilter from './CategoryFilter';
@@ -6,7 +6,7 @@ import EventModal from './EventModal';
 import EditEventModal from './EditEventModal';
 import { useEvents } from '../hooks/useEvents';
 import { formatEventDate, formatEventTime } from '../utils/dateUtils';
-import { type Event } from '../lib/supabase';
+import { type Event, type EventCategory } from '../lib/supabase';
 import { type FilterOptions } from './CategoryFilter';
 
 export interface EventGridRef {
@@ -19,7 +19,7 @@ interface EventGridProps {
   onClearFilters?: () => void;
 }
 
-const EventGrid = forwardRef<EventGridRef, EventGridProps>(({ user, onJoinClick, onClearFilters }, ref) => {
+const EventGrid = forwardRef<EventGridRef, EventGridProps>(({ user, onJoinClick, onClearFilters: _onClearFilters }, ref) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [appliedFilters, setAppliedFilters] = useState<FilterOptions | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -30,7 +30,7 @@ const EventGrid = forwardRef<EventGridRef, EventGridProps>(({ user, onJoinClick,
   
   const { events, loading, error, refetch } = useEvents(activeCategory, appliedFilters);
   
-  const categories = ['All', 'Bar', 'Club', 'Festival', 'Social Meetup', 'Home Party', 'Other'];
+  const categories: Array<'All' | EventCategory> = ['All', 'Bar', 'Club', 'Festival', 'Social Meetup', 'Home Party', 'Other'];
 
   // Expose refetch function to parent component
   useImperativeHandle(ref, () => ({
