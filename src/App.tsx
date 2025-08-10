@@ -11,9 +11,11 @@ import SignupModal from './components/SignupModal';
 import SignInModal from './components/SignInModal';
 import CommunityModal from './components/CommunityModal';
 import AboutModal from './components/AboutModal';
+import ToastNotifications from './components/ToastNotifications';
 import { useRef } from 'react';
 import { authService } from './lib/auth';
 import { isSupabaseConfigured } from './lib/supabase';
+import { useNotifications } from './hooks/useNotifications';
 
 function App() {
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
@@ -26,6 +28,7 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const { toasts, removeToast, notifySuccess, notifyError } = useNotifications();
 
   // Check for existing user session on app load
   useEffect(() => {
@@ -249,6 +252,12 @@ function App() {
       <AboutModal 
         isOpen={isAboutModalOpen}
         onClose={handleCloseAboutModal}
+      />
+
+      {/* Toast Notifications */}
+      <ToastNotifications 
+        toasts={toasts}
+        onRemove={removeToast}
       />
     </div>
   );

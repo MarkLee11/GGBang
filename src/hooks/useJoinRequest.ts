@@ -1,118 +1,139 @@
-import { useState } from 'react'
-import { requestJoinEvent, approveJoinRequest, rejectJoinRequest } from '../lib/supabase'
-import { handleApiError, logError, type ApiError } from '../utils/errorHandling'
-import type { ApiResponse } from '../lib/supabase'
+import { useState, useCallback } from 'react'
+import { submitJoinRequest, approveJoinRequest, rejectJoinRequest } from '../lib/api'
+import { useNotifications } from './useNotifications'
+import { formatDateForAI, formatTimeForAI } from '../lib/aiCopy'
 
-// Hook for requesting to join an event
-export const useRequestJoin = () => {
+export interface UseJoinRequestResult {
+  loading: boolean
+  error: string | null
+  submitRequest: (eventId: number, message?: string) => Promise<boolean>
+  clearError: () => void
+}
+
+export function useJoinRequest(): UseJoinRequestResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { notifySuccess, notifyError } = useNotifications()
 
-  const requestJoin = async (eventId: number, message: string = ''): Promise<ApiResponse> => {
+  const submitRequest = useCallback(async (eventId: number, message?: string): Promise<boolean> => {
     setLoading(true)
     setError(null)
 
     try {
-      const result = await requestJoinEvent(eventId, message)
+      const result = await submitJoinRequest(eventId, message)
       
-      if (!result.success) {
-        setError(result.error || 'Failed to submit request')
-        return result
+      if (result.success) {
+        notifySuccess('Join request submitted successfully! The host will review your request.')
+        return true
+      } else {
+        const errorMessage = result.error || 'Failed to submit join request'
+        setError(errorMessage)
+        notifyError(errorMessage)
+        return false
       }
-
-      return result
     } catch (err) {
-      const apiError = handleApiError(err)
-      logError(apiError, 'useJoinRequest')
-      setError(apiError.userMessage)
-      return { success: false, error: apiError.userMessage }
+      const errorMessage = 'Network error occurred'
+      setError(errorMessage)
+      notifyError(errorMessage)
+      return false
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const clearError = () => setError(null)
+  const clearError = useCallback(() => {
+    setError(null)
+  }, [])
 
   return {
-    requestJoin,
     loading,
     error,
+    submitRequest,
     clearError
   }
 }
 
-// Hook for host to approve requests
-export const useApproveRequest = () => {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export interface UseHostActionsResult {
+  approving: boolean
+  rejecting: boolean
+  approveError: string | null
+  rejectError: string | null
+  approve: (requestId: number) => Promise<boolean>
+  reject: (requestId: number, note?: string) => Promise<boolean>
+  clearErrors: () => void
+}
 
-  const approve = async (requestId: number): Promise<ApiResponse> => {
-    setLoading(true)
-    setError(null)
+export function useHostActions(): UseHostActionsResult {
+  const [approving, setApproving] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
+  const [approveError, setApproveError] = useState<string | null>(null)
+  const [rejectError, setRejectError] = useState<string | null>(null)
+  const { notifySuccess, notifyError } = useNotifications()
+
+  const approve = useCallback(async (requestId: number): Promise<boolean> => {
+    setApproving(true)
+    setApproveError(null)
 
     try {
       const result = await approveJoinRequest(requestId)
       
-      if (!result.success) {
-        setError(result.error || 'Failed to approve request')
-        return result
+      if (result.success) {
+        notifySuccess('Join request approved! The applicant has been notified.')
+        return true
+      } else {
+        const errorMessage = result.error || 'Failed to approve request'
+        setApproveError(errorMessage)
+        notifyError(errorMessage)
+        return false
       }
-
-      return result
     } catch (err) {
-      const apiError = handleApiError(err)
-      logError(apiError, 'useJoinRequest')
-      setError(apiError.userMessage)
-      return { success: false, error: apiError.userMessage }
+      const errorMessage = 'Network error occurred'
+      setApproveError(errorMessage)
+      notifyError(errorMessage)
+      return false
     } finally {
-      setLoading(false)
+      setApproving(false)
     }
-  }
+  }, [])
 
-  const clearError = () => setError(null)
-
-  return {
-    approve,
-    loading,
-    error,
-    clearError
-  }
-}
-
-// Hook for host to reject requests
-export const useRejectRequest = () => {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const reject = async (requestId: number, note?: string): Promise<ApiResponse> => {
-    setLoading(true)
-    setError(null)
+  const reject = useCallback(async (requestId: number, note?: string): Promise<boolean> => {
+    setRejecting(true)
+    setRejectError(null)
 
     try {
       const result = await rejectJoinRequest(requestId, note)
       
-      if (!result.success) {
-        setError(result.error || 'Failed to reject request')
-        return result
+      if (result.success) {
+        notifySuccess('Join request declined. The applicant has been notified.')
+        return true
+      } else {
+        const errorMessage = result.error || 'Failed to reject request'
+        setRejectError(errorMessage)
+        notifyError(errorMessage)
+        return false
       }
-
-      return result
     } catch (err) {
-      const apiError = handleApiError(err)
-      logError(apiError, 'useJoinRequest')
-      setError(apiError.userMessage)
-      return { success: false, error: apiError.userMessage }
+      const errorMessage = 'Network error occurred'
+      setRejectError(errorMessage)
+      notifyError(errorMessage)
+      return false
     } finally {
-      setLoading(false)
+      setRejecting(false)
     }
-  }
+  }, [])
 
-  const clearError = () => setError(null)
+  const clearErrors = useCallback(() => {
+    setApproveError(null)
+    setRejectError(null)
+  }, [])
 
   return {
+    approving,
+    rejecting,
+    approveError,
+    rejectError,
+    approve,
     reject,
-    loading,
-    error,
-    clearError
+    clearErrors
   }
 }

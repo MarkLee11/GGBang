@@ -1,8 +1,8 @@
 /*
   # Category Constraints Migration
   
-  Goal: 在不动 auth.users 的前提下，补齐"资料 + 申请-审核"所需表与字段，
-        并把所有用户外键统一成 UUID → auth.users(id)。
+  Goal: Without modifying auth.users, complete the required tables and fields for 
+        "profiles + application-review", and unify all user foreign keys to UUID → auth.users(id).
   
   This migration ensures:
   1. All required tables exist (profiles, join_requests)

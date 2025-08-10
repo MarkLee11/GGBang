@@ -1,0 +1,282 @@
+/**
+ * AI-powered copy generation for notifications
+ * Uses OpenAI GPT-4 to generate friendly, personalized notification messages
+ */
+
+export type CopyType = 'request_created' | 'approved' | 'rejected' | 'location_unlocked' | 'event_reminder'
+
+export interface NotificationContext {
+  eventTitle: string
+  eventDate: string
+  eventTime: string
+  requesterName?: string
+  hostName?: string
+  hostNote?: string
+  locationHint?: string
+  exactLocation?: string
+  attendeeCount?: number
+  capacity?: number
+}
+
+interface OpenAIResponse {
+  choices: Array<{
+    message: {
+      content: string
+    }
+  }>
+}
+
+// Fallback messages for when AI is not available
+const FALLBACK_MESSAGES: Record<CopyType, (ctx: NotificationContext) => string> = {
+  request_created: (ctx) => 
+    `${ctx.requesterName} has requested to join "${ctx.eventTitle}" on ${ctx.eventDate}. Review their request in your event dashboard.`,
+  
+  approved: (ctx) => 
+    `Great news! Your request to join "${ctx.eventTitle}" on ${ctx.eventDate} has been approved. Get ready for an amazing time!`,
+  
+  rejected: (ctx) => 
+    `Your request to join "${ctx.eventTitle}" wasn't approved this time. Don't worry - there are plenty more events to explore!`,
+  
+  location_unlocked: (ctx) => 
+    `The exact location for "${ctx.eventTitle}" has been revealed! Check your event details for the address.`,
+  
+  event_reminder: (ctx) => 
+    `Reminder: "${ctx.eventTitle}" starts soon on ${ctx.eventDate} at ${ctx.eventTime}. See you there!`
+}
+
+const PROMPTS: Record<CopyType, string> = {
+  request_created: `
+You are generating a friendly notification for an event host. Someone has requested to join their event.
+Create a warm, professional message (1-2 sentences) that:
+- Mentions the requester's name and event title
+- Encourages the host to review the request
+- Maintains an upbeat, community-focused tone
+- Is concise but personable
+Keep it under 150 characters for mobile notifications.
+`,
+
+  approved: `
+You are generating a congratulatory notification for someone whose event join request was approved.
+Create an enthusiastic, welcoming message (1-2 sentences) that:
+- Celebrates their approval
+- Mentions the event title and date
+- Builds excitement for the event
+- Uses warm, inclusive language
+Keep it under 150 characters for mobile notifications.
+`,
+
+  rejected: `
+You are generating a gentle, encouraging notification for someone whose event join request was declined.
+Create a supportive message (1-2 sentences) that:
+- Acknowledges the outcome kindly
+- Encourages them to keep exploring events
+- Maintains a positive, hopeful tone
+- Doesn't make assumptions about why they were declined
+Keep it under 150 characters for mobile notifications.
+`,
+
+  location_unlocked: `
+You are generating an exciting notification about event location being revealed.
+Create an engaging message (1-2 sentences) that:
+- Announces the location reveal
+- Builds anticipation for the event
+- Encourages checking the updated details
+- Uses energetic, positive language
+Keep it under 150 characters for mobile notifications.
+`,
+
+  event_reminder: `
+You are generating a friendly reminder notification for an upcoming event.
+Create a helpful reminder message (1-2 sentences) that:
+- Reminds about the event timing
+- Builds excitement for attendance
+- Uses warm, anticipatory language
+- Encourages punctuality without being pushy
+Keep it under 150 characters for mobile notifications.
+`
+}
+
+export async function genNotice(copyType: CopyType, context: NotificationContext): Promise<string> {
+  try {
+    // Check if OpenAI API key is available
+    const openaiKey = process.env.OPENAI_API_KEY || Deno?.env?.get?.('OPENAI_API_KEY')
+    if (!openaiKey) {
+      console.warn('OpenAI API key not configured, using fallback message')
+      return FALLBACK_MESSAGES[copyType](context)
+    }
+
+    // Format the context for the AI
+    const contextString = formatContextForAI(context)
+    const systemPrompt = PROMPTS[copyType]
+    const userPrompt = `Context: ${contextString}\n\nGenerate the notification message:`
+
+    // Call OpenAI API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 100,
+        temperature: 0.7,
+        frequency_penalty: 0.3,
+        presence_penalty: 0.2
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data: OpenAIResponse = await response.json()
+    const generatedText = data.choices[0]?.message?.content?.trim()
+
+    if (!generatedText) {
+      throw new Error('No content generated by AI')
+    }
+
+    // Clean up the generated text
+    const cleanedText = cleanGeneratedText(generatedText)
+    
+    // Validate length (fallback if too long)
+    if (cleanedText.length > 200) {
+      console.warn('AI generated text too long, using fallback')
+      return FALLBACK_MESSAGES[copyType](context)
+    }
+
+    return cleanedText
+
+  } catch (error) {
+    console.error('Error generating AI copy:', error)
+    return FALLBACK_MESSAGES[copyType](context)
+  }
+}
+
+function formatContextForAI(context: NotificationContext): string {
+  const parts: string[] = []
+  
+  parts.push(`Event: "${context.eventTitle}"`)
+  parts.push(`Date: ${context.eventDate}`)
+  parts.push(`Time: ${context.eventTime}`)
+  
+  if (context.requesterName) {
+    parts.push(`Requester: ${context.requesterName}`)
+  }
+  
+  if (context.hostName) {
+    parts.push(`Host: ${context.hostName}`)
+  }
+  
+  if (context.hostNote) {
+    parts.push(`Host note: "${context.hostNote}"`)
+  }
+  
+  if (context.locationHint) {
+    parts.push(`Location: ${context.locationHint}`)
+  }
+  
+  if (context.attendeeCount && context.capacity) {
+    parts.push(`Attendees: ${context.attendeeCount}/${context.capacity}`)
+  }
+  
+  return parts.join(', ')
+}
+
+function cleanGeneratedText(text: string): string {
+  return text
+    .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+    .replace(/\n+/g, ' ') // Replace newlines with spaces
+    .replace(/\s+/g, ' ') // Collapse multiple spaces
+    .trim()
+}
+
+// Utility function to format dates for AI context
+export function formatDateForAI(dateString: string): string {
+  try {
+    const date = new Date(dateString)
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'today'
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'tomorrow'
+    } else {
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        month: 'short', 
+        day: 'numeric' 
+      })
+    }
+  } catch {
+    return dateString
+  }
+}
+
+// Utility function to format time for AI context
+export function formatTimeForAI(timeString: string): string {
+  try {
+    const [hours, minutes] = timeString.split(':').map(Number)
+    const date = new Date()
+    date.setHours(hours, minutes)
+    
+    return date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })
+  } catch {
+    return timeString
+  }
+}
+
+// Generate email subject lines
+export function generateSubject(copyType: CopyType, context: NotificationContext): string {
+  switch (copyType) {
+    case 'request_created':
+      return `New join request for "${context.eventTitle}"`
+    case 'approved':
+      return `You're in! "${context.eventTitle}" request approved`
+    case 'rejected':
+      return `Update on your "${context.eventTitle}" request`
+    case 'location_unlocked':
+      return `📍 Location revealed for "${context.eventTitle}"`
+    case 'event_reminder':
+      return `⏰ "${context.eventTitle}" starts soon!`
+    default:
+      return `Update about "${context.eventTitle}"`
+  }
+}
+
+// Shorten text for toast notifications (mobile-friendly)
+export function shortenForToast(text: string, maxLength: number = 120): string {
+  if (text.length <= maxLength) {
+    return text
+  }
+  
+  // Try to cut at a sentence boundary
+  const sentences = text.split(/[.!?]+/)
+  if (sentences[0] && sentences[0].length <= maxLength) {
+    return sentences[0].trim() + '.'
+  }
+  
+  // Cut at word boundary
+  const words = text.split(' ')
+  let result = ''
+  
+  for (const word of words) {
+    if ((result + ' ' + word).length > maxLength - 3) {
+      break
+    }
+    result += (result ? ' ' : '') + word
+  }
+  
+  return result + '...'
+}

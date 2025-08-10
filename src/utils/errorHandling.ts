@@ -1,4 +1,4 @@
-// 错误处理和用户友好错误消息工具
+// Error handling and user-friendly error message utilities
 
 export interface ApiError {
   code: string;
@@ -7,109 +7,109 @@ export interface ApiError {
   userMessage: string;
 }
 
-// 错误码映射表 - 将后端错误码转换为用户友好的消息
+// Error code mapping table - Convert backend error codes to user-friendly messages
 export const ERROR_MESSAGES: Record<string, string> = {
-  // 认证相关错误
-  'UNAUTHORIZED': '请先登录后再进行此操作',
-  'FORBIDDEN': '您没有权限执行此操作',
-  'TOKEN_EXPIRED': '登录已过期，请重新登录',
+  // Authentication related errors
+  'UNAUTHORIZED': 'Please log in to perform this action',
+  'FORBIDDEN': 'You do not have permission to perform this action',
+  'TOKEN_EXPIRED': 'Your session has expired, please log in again',
   
-  // 事件相关错误
-  'EVENT_NOT_FOUND': '找不到该活动',
-  'EVENT_PAST': '无法申请已过期的活动',
-  'EVENT_FULL': '活动人数已满，无法申请',
-  'INVALID_EVENT_ID': '无效的活动ID',
-  'OWN_EVENT': '无法申请参加自己创建的活动',
+  // Event related errors
+  'EVENT_NOT_FOUND': 'Event not found',
+  'EVENT_PAST': 'Cannot apply to past events',
+  'EVENT_FULL': 'Event is at full capacity, cannot apply',
+  'INVALID_EVENT_ID': 'Invalid event ID',
+  'OWN_EVENT': 'Cannot apply to join your own event',
   
-  // 申请相关错误
-  'DUPLICATE_PENDING': '您已经提交过申请，请等待审核结果',
-  'DUPLICATE_REQUEST': '您已经申请过此活动了',
-  'ALREADY_APPROVED': '您的申请已经被批准了',
-  'ALREADY_ATTENDING': '您已经是该活动的参与者了',
-  'TOO_MANY_PENDING': '您的待处理申请过多，请等待部分申请处理完成后再试',
-  'REJECTION_COOLDOWN': '被拒绝后需要等待一段时间才能重新申请',
+  // Application related errors
+  'DUPLICATE_PENDING': 'You already have a pending request, please wait for review',
+  'DUPLICATE_REQUEST': 'You have already applied to this event',
+  'ALREADY_APPROVED': 'Your request has already been approved',
+  'ALREADY_ATTENDING': 'You are already attending this event',
+  'TOO_MANY_PENDING': 'You have too many pending requests, please wait for some to be processed',
+  'REJECTION_COOLDOWN': 'You need to wait before applying again after being rejected',
   
-  // 容量相关错误
-  'CAPACITY_EXCEEDED': '活动人数已满，无法批准更多申请',
-  'REQUEST_NOT_PENDING': '该申请已经被处理过了',
-  'ALREADY_ATTENDING_ERROR': '该用户已经是活动参与者',
+  // Capacity related errors
+  'CAPACITY_EXCEEDED': 'Event is at full capacity, cannot approve more requests',
+  'REQUEST_NOT_PENDING': 'This request has already been processed',
+  'ALREADY_ATTENDING_ERROR': 'This user is already attending the event',
   
-  // 地点解锁错误
-  'LOCATION_ALREADY_UNLOCKED': '活动地点已经解锁',
-  'NOT_EVENT_HOST': '只有活动主办方可以解锁地点',
-  'NO_EXACT_LOCATION': '该活动没有设置精确地点',
+  // Location unlock errors
+  'LOCATION_ALREADY_UNLOCKED': 'Event location is already unlocked',
+  'NOT_EVENT_HOST': 'Only event hosts can unlock location',
+  'NO_EXACT_LOCATION': 'This event has no exact location set',
   
-  // 通用错误
-  'INTERNAL_ERROR': '服务器内部错误，请稍后重试',
-  'NETWORK_ERROR': '网络连接错误，请检查您的网络连接',
-  'VALIDATION_ERROR': '输入数据格式错误',
-  'RATE_LIMIT_EXCEEDED': '操作过于频繁，请稍后再试',
+  // General errors
+  'INTERNAL_ERROR': 'Internal server error, please try again later',
+  'NETWORK_ERROR': 'Network connection error, please check your connection',
+  'VALIDATION_ERROR': 'Input data format error',
+  'RATE_LIMIT_EXCEEDED': 'Too many requests, please try again later',
   
-  // 数据库错误
-  'DATABASE_ERROR': '数据库操作失败，请稍后重试',
-  'CONSTRAINT_VIOLATION': '数据完整性错误',
-  'FOREIGN_KEY_VIOLATION': '关联数据不存在',
+  // Database errors
+  'DATABASE_ERROR': 'Database operation failed, please try again later',
+  'CONSTRAINT_VIOLATION': 'Data integrity error',
+  'FOREIGN_KEY_VIOLATION': 'Related data does not exist',
   
-  // 文件上传错误
-  'UPLOAD_ERROR': '文件上传失败',
-  'FILE_TOO_LARGE': '文件大小超出限制',
-  'INVALID_FILE_TYPE': '不支持的文件类型',
+  // File upload errors
+  'UPLOAD_ERROR': 'File upload failed',
+  'FILE_TOO_LARGE': 'File size exceeds limit',
+  'INVALID_FILE_TYPE': 'Unsupported file type',
   
-  // 时间相关错误
-  'INVALID_DATE_TIME': '无效的日期时间格式',
-  'DATE_IN_PAST': '日期时间必须是未来时间',
-  'TIME_CONFLICT': '时间冲突',
+  // Time related errors
+  'INVALID_DATE_TIME': 'Invalid date time format',
+  'DATE_IN_PAST': 'Date and time must be in the future',
+  'TIME_CONFLICT': 'Time conflict',
   
-  // 权限相关错误
-  'INSUFFICIENT_PERMISSIONS': '权限不足',
-  'ACCOUNT_SUSPENDED': '账户已被暂停',
-  'ACCOUNT_VERIFICATION_REQUIRED': '账户需要验证',
+  // Permission related errors
+  'INSUFFICIENT_PERMISSIONS': 'Insufficient permissions',
+  'ACCOUNT_SUSPENDED': 'Account has been suspended',
+  'ACCOUNT_VERIFICATION_REQUIRED': 'Account verification required',
 };
 
-// 根据错误码和上下文生成用户友好的错误消息
+// Generate user-friendly error messages based on error code and context
 export const getErrorMessage = (errorCode: string, context?: any): string => {
-  const baseMessage = ERROR_MESSAGES[errorCode] || '发生了未知错误，请稍后重试';
+  const baseMessage = ERROR_MESSAGES[errorCode] || 'An unknown error occurred, please try again later';
   
-  // 根据上下文自定义特定错误消息
+  // Customize specific error messages based on context
   switch (errorCode) {
     case 'TOO_MANY_PENDING':
       const { currentPendingCount, maxAllowed } = context || {};
-      return `您当前有 ${currentPendingCount} 个待处理申请，已达到最大限制 ${maxAllowed} 个。请等待部分申请被处理后再提交新申请。`;
+      return `You currently have ${currentPendingCount} pending requests, reaching the maximum limit of ${maxAllowed}. Please wait for some requests to be processed before submitting new ones.`;
       
     case 'REJECTION_COOLDOWN':
       const { daysRemaining, hoursRemaining } = context || {};
       if (daysRemaining > 1) {
-        return `您需要等待 ${daysRemaining} 天后才能重新申请该活动`;
+        return `You need to wait ${daysRemaining} days before applying to this event again`;
       } else {
-        return `您需要等待 ${hoursRemaining} 小时后才能重新申请该活动`;
+        return `You need to wait ${hoursRemaining} hours before applying to this event again`;
       }
       
     case 'EVENT_FULL':
       const { capacity, currentAttendees } = context || {};
-      return `活动人数已满 (${currentAttendees}/${capacity})，目前无法申请`;
+      return `Event is at full capacity (${currentAttendees}/${capacity}), cannot apply at this time`;
       
     case 'CAPACITY_EXCEEDED':
       const { eventCapacity, currentCount } = context || {};
-      return `活动容量已满 (${currentCount}/${eventCapacity})，无法批准更多申请`;
+      return `Event capacity is full (${currentCount}/${eventCapacity}), cannot approve more requests`;
       
     default:
       return baseMessage;
   }
 };
 
-// 处理 API 响应错误
+// Handle API response errors
 export const handleApiError = (error: any): ApiError => {
-  // 如果是我们的自定义错误响应
+  // If it's our custom error response
   if (error?.code && typeof error.code === 'string') {
     return {
       code: error.code,
-      message: error.message || error.error || '未知错误',
+      message: error.message || error.error || 'Unknown error',
       details: error,
       userMessage: getErrorMessage(error.code, error)
     };
   }
   
-  // 如果是网络错误
+  // If it's a network error
   if (error?.message?.includes('fetch')) {
     return {
       code: 'NETWORK_ERROR',
@@ -119,9 +119,9 @@ export const handleApiError = (error: any): ApiError => {
     };
   }
   
-  // 如果是 Supabase 错误
+  // If it's a Supabase error
   if (error?.message && typeof error.message === 'string') {
-    // 根据错误消息推断错误类型
+    // Infer error type based on error message
     if (error.message.includes('JWT')) {
       return {
         code: 'TOKEN_EXPIRED',
@@ -150,16 +150,16 @@ export const handleApiError = (error: any): ApiError => {
     }
   }
   
-  // 默认内部错误
+  // Default internal error
   return {
     code: 'INTERNAL_ERROR',
-    message: error?.message || '未知错误',
+    message: error?.message || 'Unknown error',
     details: error,
     userMessage: getErrorMessage('INTERNAL_ERROR')
   };
 };
 
-// 日志记录函数（用于错误追踪）
+// Error logging function (for error tracking)
 export const logError = (error: ApiError, context?: string) => {
   const timestamp = new Date().toISOString();
   const logEntry = {
@@ -172,16 +172,16 @@ export const logError = (error: ApiError, context?: string) => {
     url: window.location.href
   };
   
-  // 在开发环境中打印到控制台
+  // Print to console in development environment
   if (process.env.NODE_ENV === 'development') {
     console.error('[ERROR LOG]', logEntry);
   }
   
-  // 在生产环境中，这里可以发送到错误监控服务
-  // 例如: sendToErrorTracking(logEntry);
+  // In production environment, this can be sent to error monitoring service
+  // Example: sendToErrorTracking(logEntry);
 };
 
-// React Hook 用于错误处理
+// React Hook for error handling
 export const useErrorHandler = () => {
   const handleError = (error: any, context?: string): string => {
     const apiError = handleApiError(error);
@@ -192,32 +192,32 @@ export const useErrorHandler = () => {
   return { handleError };
 };
 
-// 错误边界组件的错误处理
+// Error handling for error boundary components
 export const handleComponentError = (error: Error, errorInfo: any) => {
   const apiError: ApiError = {
     code: 'COMPONENT_ERROR',
     message: error.message,
     details: { error, errorInfo },
-    userMessage: '页面渲染出错，请刷新页面重试'
+    userMessage: 'Page rendering error, please refresh and try again'
   };
   
   logError(apiError, 'React Error Boundary');
   return apiError;
 };
 
-// 成功消息映射表
+// Success message mapping table
 export const SUCCESS_MESSAGES: Record<string, string> = {
-  'JOIN_REQUEST_SUBMITTED': '申请已提交，请等待审核',
-  'REQUEST_APPROVED': '申请已批准',
-  'REQUEST_REJECTED': '申请已拒绝',
-  'LOCATION_UNLOCKED': '地点已解锁，参与者现在可以查看精确地址',
-  'EVENT_CREATED': '活动创建成功',
-  'EVENT_UPDATED': '活动更新成功',
-  'EVENT_DELETED': '活动删除成功',
-  'PROFILE_UPDATED': '个人资料更新成功',
-  'IMAGE_UPLOADED': '图片上传成功',
+  'JOIN_REQUEST_SUBMITTED': 'Request submitted, please wait for review',
+  'REQUEST_APPROVED': 'Request approved',
+  'REQUEST_REJECTED': 'Request rejected',
+  'LOCATION_UNLOCKED': 'Location unlocked, participants can now view exact address',
+  'EVENT_CREATED': 'Event created successfully',
+  'EVENT_UPDATED': 'Event updated successfully',
+  'EVENT_DELETED': 'Event deleted successfully',
+  'PROFILE_UPDATED': 'Profile updated successfully',
+  'IMAGE_UPLOADED': 'Image uploaded successfully',
 };
 
 export const getSuccessMessage = (code: string): string => {
-  return SUCCESS_MESSAGES[code] || '操作成功';
+  return SUCCESS_MESSAGES[code] || 'Operation successful';
 };

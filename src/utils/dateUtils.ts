@@ -1,8 +1,8 @@
-// UTC时间处理工具函数
+// UTC time handling utility functions
 
 export const formatEventDate = (dateString: string): string => {
-  // 创建UTC日期对象并按用户时区显示
-  const date = new Date(dateString + 'T00:00:00Z') // 确保作为UTC处理
+  // Create UTC date object and display in user's timezone
+  const date = new Date(dateString + 'T00:00:00Z') // Ensure processed as UTC
   return date.toLocaleDateString(undefined, {
     month: 'long',
     day: 'numeric',
@@ -22,9 +22,9 @@ export const formatEventTime = (timeString: string): string => {
   })
 }
 
-// 新增：完整的日期时间格式化（UTC转本地时间）
+// Complete date-time formatting (UTC to local time)
 export const formatEventDateTime = (dateString: string, timeString: string): string => {
-  // 创建UTC时间并转换为用户本地时间
+  // Create UTC time and convert to user's local time
   const utcDateTime = new Date(`${dateString}T${timeString}:00Z`)
   
   return utcDateTime.toLocaleString(undefined, {
@@ -38,7 +38,7 @@ export const formatEventDateTime = (dateString: string, timeString: string): str
   })
 }
 
-// 新增：获取当前UTC时间字符串（用于后端存储）
+// Get current UTC time string (for backend storage)
 export const getCurrentUTCDateTimeString = (): { date: string; time: string } => {
   const now = new Date()
   const utcDate = now.toISOString().split('T')[0] // YYYY-MM-DD
@@ -47,9 +47,9 @@ export const getCurrentUTCDateTimeString = (): { date: string; time: string } =>
   return { date: utcDate, time: utcTime }
 }
 
-// 新增：将本地时间转换为UTC存储格式
+// Convert local time to UTC storage format
 export const convertLocalToUTC = (dateString: string, timeString: string): { date: string; time: string } => {
-  // 假设用户输入的是本地时间，转换为UTC
+  // Assume user input is local time, convert to UTC
   const localDateTime = new Date(`${dateString}T${timeString}:00`)
   const utcDate = localDateTime.toISOString().split('T')[0]
   const utcTime = localDateTime.toISOString().split('T')[1].slice(0, 5)
@@ -57,19 +57,19 @@ export const convertLocalToUTC = (dateString: string, timeString: string): { dat
   return { date: utcDate, time: utcTime }
 }
 
-// 新增：检查事件是否在未来（用于验证）
+// Check if event is in the future (for validation)
 export const isEventInFuture = (dateString: string, timeString: string): boolean => {
   const eventDateTime = new Date(`${dateString}T${timeString}:00`)
   const now = new Date()
   return eventDateTime > now
 }
 
-// 新增：获取事件状态（即将开始、进行中、已结束）
+// Get event status (upcoming, ongoing, past)
 export const getEventStatus = (dateString: string, timeString: string): 'upcoming' | 'ongoing' | 'past' => {
   const eventDateTime = new Date(`${dateString}T${timeString}:00`)
   const now = new Date()
   
-  // 假设事件持续2小时
+  // Assume event lasts 2 hours
   const eventEndTime = new Date(eventDateTime.getTime() + 2 * 60 * 60 * 1000)
   
   if (now < eventDateTime) {

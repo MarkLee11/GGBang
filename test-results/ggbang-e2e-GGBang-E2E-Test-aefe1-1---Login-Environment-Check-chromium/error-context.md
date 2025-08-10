@@ -1,0 +1,86 @@
+# Page snapshot
+
+```yaml
+- navigation:
+  - button "GGBang"
+  - button "Events":
+    - img
+    - text: Events
+  - button "Create Event":
+    - img
+    - text: Create Event
+  - button "Community"
+  - button "Sign In":
+    - img
+    - text: Sign In
+  - button "Join Now"
+- main:
+  - heading "Join or Create Small Gay Outings" [level=1]
+  - img "Pride celebration animation"
+  - paragraph: Find friends to go together to gay bars, clubs, festivals and more. Small group, safe, and fun.
+  - button "Join the GGBang"
+  - heading "Choose your outing type:" [level=2]
+  - button "All"
+  - button "Bar"
+  - button "Club"
+  - button "Festival"
+  - button "Social Meetup"
+  - button "Home Party"
+  - button "Other"
+  - button "Show Advanced Filters":
+    - img
+    - text: Show Advanced Filters
+  - heading "Small Gay Outings Near You" [level=2]
+  - paragraph: Join small group outings with gay friends in your city
+  - img "Join 6 Friends for Cocktails at Local Gay Bar"
+  - img
+  - text: Bar
+  - img
+  - text: "6"
+  - heading "Join 6 Friends for Cocktails at Local Gay Bar" [level=3]
+  - paragraph: Casual drinks and good vibes at our favorite neighborhood spot. Perfect for meeting new people in a relaxed setting!
+  - img
+  - text: August 9, 2025
+  - img
+  - text: 7:30 PM
+  - img
+  - text: Near Berlin • Germany
+  - button "View Details"
+  - img "Happy Hour Hangout (Max 8 People)"
+  - img
+  - text: Bar
+  - img
+  - text: "6"
+  - heading "Happy Hour Hangout (Max 8 People)" [level=3]
+  - paragraph: Join us for discounted drinks and great conversation. Small group, big fun!
+  - img
+  - text: August 10, 2025
+  - img
+  - text: 5:00 PM
+  - img
+  - text: Near San Francisco • United States
+  - button "View Details"
+  - img "Cozy Wine Bar Night (4-6 People)"
+  - img
+  - text: Bar
+  - img
+  - text: "6"
+  - heading "Cozy Wine Bar Night (4-6 People)" [level=3]
+  - paragraph: Intimate evening at a charming wine bar. Perfect for deeper conversations and new friendships.
+  - img
+  - text: August 11, 2025
+  - img
+  - text: 8:00 PM
+  - img
+  - text: Near Paris • France
+  - button "View Details"
+  - button "Discover More Gay Events"
+- contentinfo:
+  - heading "GGBang" [level=3]
+  - paragraph: Your safe space to meet friends and go out together.
+  - paragraph:
+    - text: "Contact us:"
+    - link "Aa1439422778@gmail.com":
+      - /url: mailto:Aa1439422778@gmail.com
+  - paragraph: © 2025 GGBang. Made with ❤️ for the Gay community.
+```

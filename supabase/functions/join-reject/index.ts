@@ -1,212 +1,132 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { 
+  corsHeaders, 
+  createAuthenticatedClient,
+  createAdminClient,
+  validateAuth, 
+  validateJsonBody, 
+  createSuccessResponse, 
+  createErrorResponse,
+  handleCors,
+  getEventHost
+} from '../_shared/utils.ts'
+import { ERROR_CODES, ERROR_MESSAGES, type ApproveRejectBody } from '../_shared/types.ts'
+import { sendNotificationToUser } from '../_shared/notifications.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+// Validator for request body
+function isApproveRejectBody(data: any): data is ApproveRejectBody {
+  return typeof data === 'object' && 
+         typeof data.requestId === 'number' &&
+         (data.note === undefined || typeof data.note === 'string')
 }
 
-interface RejectRequestBody {
-  requestId: number
-  note?: string
-}
+serve(async (req: Request) => {
+  // Handle CORS preflight
+  const corsResponse = handleCors(req)
+  if (corsResponse) return corsResponse
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  // Only allow POST method
+  if (req.method !== 'POST') {
+    return createErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Method not allowed', 405)
   }
 
   try {
-    // Create Supabase client
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
+    // Validate JSON body
+    const bodyResult = await validateJsonBody(req, isApproveRejectBody)
+    if ('error' in bodyResult) return bodyResult.error
+    const { requestId, note = '' } = bodyResult.data
 
-    // Also create a service role client for transaction operations
-    const supabaseServiceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
+    // Create authenticated client
+    const supabase = createAuthenticatedClient(req)
+    
+    // Validate authentication
+    const authResult = await validateAuth(supabase)
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
 
-    // Get the current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser()
-
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Unauthorized: Authentication required',
-          code: 'UNAUTHORIZED'
-        }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // Parse request body
-    const { requestId, note }: RejectRequestBody = await req.json()
-
-    if (!requestId || typeof requestId !== 'number') {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Valid Request ID is required',
-          code: 'INVALID_REQUEST_ID'
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // Get the join request and verify user is the event host
-    const { data: joinRequest, error: requestError } = await supabaseClient
+    // Get join request details
+    const { data: joinRequest, error: requestError } = await supabase
       .from('join_requests')
       .select(`
-        *,
-        events!inner(
-          id, 
-          user_id, 
-          title,
-          date,
-          time
+        id, 
+        event_id, 
+        requester_id, 
+        status,
+        events!inner (
+          id,
+          user_id,
+          title
         )
       `)
       .eq('id', requestId)
       .single()
 
     if (requestError || !joinRequest) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Join request not found',
-          code: 'REQUEST_NOT_FOUND'
-        }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      return createErrorResponse(ERROR_CODES.NOT_FOUND, 'Join request not found', 404)
     }
 
-    // 仅主办方可以拒绝申请
+    // Verify user is the event host
     if (joinRequest.events.user_id !== user.id) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Forbidden: You can only reject requests for your own events',
-          code: 'FORBIDDEN'
-        }),
-        { 
-          status: 403, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      return createErrorResponse(ERROR_CODES.FORBIDDEN, 'Only event host can reject requests', 403)
     }
 
-    // 检查申请状态
+    // Check if request is still pending
     if (joinRequest.status !== 'pending') {
-      return new Response(
-        JSON.stringify({ 
-          error: `Request is already ${joinRequest.status}`,
-          code: 'REQUEST_NOT_PENDING',
-          currentStatus: joinRequest.status
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      return createErrorResponse(ERROR_CODES.CONFLICT, 'Request is not pending', 409)
     }
 
-    // 检查事件是否还在未来（可选，主办方可能想要拒绝过期的申请）
-    const eventDateTime = new Date(`${joinRequest.events.date}T${joinRequest.events.time}`)
-    const now = new Date()
-
-    // 使用事务安全的拒绝函数
-    const { data: transactionResult, error: transactionError } = await supabaseServiceClient
-      .rpc('reject_join_request_transaction', {
-        p_request_id: requestId,
-        p_rejection_note: note || null
+    // Update join request status to rejected
+    const { error: updateError } = await supabase
+      .from('join_requests')
+      .update({ 
+        status: 'rejected',
+        note: note.trim() || null,
+        updated_at: new Date().toISOString()
       })
+      .eq('id', requestId)
 
-    if (transactionError) {
-      console.error('Transaction error:', transactionError)
-      
-      if (transactionError.message?.includes('request_not_found')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Join request not found',
-            code: 'REQUEST_NOT_FOUND'
-          }),
-          { 
-            status: 404, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
-      
-      if (transactionError.message?.includes('request_not_pending')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Request is not in pending status',
-            code: 'REQUEST_NOT_PENDING'
-          }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
-      
-      throw transactionError
+    if (updateError) {
+      console.error('Error rejecting join request:', updateError)
+      return createErrorResponse(ERROR_CODES.INTERNAL_ERROR, 'Failed to reject join request', 500)
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Join request rejected successfully',
-        eventTitle: joinRequest.events.title,
-        requester: {
-          id: joinRequest.requester_id
-        },
-        rejectionNote: note || null,
-        rejectedAt: new Date().toISOString(),
-        isPastEvent: eventDateTime <= now
-      }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    // Send rejection notification to requester
+    try {
+      const adminClient = createAdminClient()
+      
+      // Get event details for notification
+      const { data: eventData } = await supabase
+        .from('events')
+        .select('id, title, date, time, place_hint, user_id')
+        .eq('id', joinRequest.event_id)
+        .single()
+
+      if (eventData) {
+        const notificationResult = await sendNotificationToUser(
+          joinRequest.requester_id,
+          'rejected',
+          eventData,
+          adminClient,
+          null,
+          null,
+          note || undefined
+        )
+
+        console.log('Rejection notification result:', notificationResult)
       }
-    )
+    } catch (notificationError) {
+      // Don't fail the rejection if notification fails
+      console.error('Failed to send rejection notification:', notificationError)
+    }
+
+    return createSuccessResponse({ 
+      message: 'Join request rejected successfully',
+      requestId: requestId
+    })
 
   } catch (error) {
-    console.error('Error in join-reject function:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Internal server error',
-        code: 'INTERNAL_ERROR'
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    console.error('Unexpected error:', error)
+    return createErrorResponse(ERROR_CODES.INTERNAL_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], 500)
   }
 })

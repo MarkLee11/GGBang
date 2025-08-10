@@ -1,640 +1,635 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Upload, 
-  Trash2, 
-  User, 
-  MapPin, 
-  Calendar, 
-  Heart, 
-  Tag, 
-  Ruler, 
-  Weight,
-  Shield,
-  Link as LinkIcon,
-  AlertTriangle,
-  Save,
-  Plus,
-  Minus
-} from 'lucide-react';
-import { 
-  updateUserProfile, 
-  uploadProfileImage, 
-  deleteProfileImage,
-  getInterestCategories,
-  getPreferenceOptions,
-  getCurrentUserProfile,
-  type Profile,
-  type InterestCategory,
-  type PreferenceOption
-} from '../lib/supabase';
+import React, { useState, useEffect } from 'react'
+import { X, Upload, Trash2, Plus, User, Lock, Eye, EyeOff, Save } from 'lucide-react'
+import { useProfile } from '../hooks/useProfile'
+import { type Profile } from '../lib/supabase'
 
 interface EditProfileModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  user?: any;
-  onProfileUpdated?: () => void;
+  isOpen: boolean
+  onClose: () => void
+  onSuccess?: () => void
 }
+
+// Predefined options for dropdowns
+const INTERESTS_OPTIONS = [
+  'Music', 'Sports', 'Art', 'Travel', 'Food', 'Technology', 'Books', 'Movies', 
+  'Fitness', 'Gaming', 'Photography', 'Dancing', 'Hiking', 'Cooking', 'Fashion',
+  'Politics', 'Science', 'History', 'Animals', 'Meditation', 'Wine', 'Coffee'
+]
+
+const PREFERENCES_OPTIONS = [
+  'Long-term relationship', 'Casual dating', 'Friendship', 'Networking', 
+  'Travel companion', 'Activity partner', 'Mentorship', 'Creative collaboration'
+]
+
+const BODY_TYPE_OPTIONS = [
+  { value: 'slim', label: 'Slim' },
+  { value: 'average', label: 'Average' },
+  { value: 'athletic', label: 'Athletic' },
+  { value: 'muscular', label: 'Muscular' },
+  { value: 'bear', label: 'Bear' },
+  { value: 'chubby', label: 'Chubby' },
+  { value: 'stocky', label: 'Stocky' },
+  { value: 'other', label: 'Other' }
+]
+
+const RELATIONSHIP_STATUS_OPTIONS = [
+  { value: 'single', label: 'Single' },
+  { value: 'taken', label: 'Taken' },
+  { value: 'married', label: 'Married' },
+  { value: 'open', label: 'Open Relationship' },
+  { value: 'complicated', label: 'It\'s Complicated' },
+  { value: 'not_specified', label: 'Prefer not to say' }
+]
+
+const HIV_STATUS_OPTIONS = [
+  { value: 'negative', label: 'Negative' },
+  { value: 'positive', label: 'Positive' },
+  { value: 'unknown', label: 'Unknown' },
+  { value: 'not_disclosed', label: 'Prefer not to disclose' }
+]
+
+const PREP_USAGE_OPTIONS = [
+  { value: 'on_prep', label: 'On PrEP' },
+  { value: 'not_on_prep', label: 'Not on PrEP' },
+  { value: 'considering', label: 'Considering PrEP' },
+  { value: 'not_disclosed', label: 'Prefer not to disclose' }
+]
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({
   isOpen,
   onClose,
-  user,
-  onProfileUpdated
+  onSuccess
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { profile, loading, error, updateProfile, uploadImages, deleteImage } = useProfile()
   
-  // Profile data
-  const [profile, setProfile] = useState<Partial<Profile>>({
-    display_name: '',
-    bio: '',
-    age: undefined,
-    city: '',
-    country: '',
-    interests: [],
-    preferences: [],
-    height_cm: undefined,
-    weight_kg: undefined,
-    body_type: null,
-    relationship_status: null,
-    hiv_status: null,
-    prep_usage: null,
-    social_links: {},
-    profile_images: []
-  });
+  const [activeTab, setActiveTab] = useState<'basic' | 'physical' | 'preferences' | 'sensitive'>('basic')
+  const [formData, setFormData] = useState<Partial<Profile>>({})
+  const [saving, setSaving] = useState(false)
+  const [uploadingImages, setUploadingImages] = useState(false)
+  const [showSensitiveInfo, setShowSensitiveInfo] = useState(false)
 
-  // Options data
-  const [interestCategories, setInterestCategories] = useState<InterestCategory[]>([]);
-  const [preferenceOptions, setPreferenceOptions] = useState<PreferenceOption[]>([]);
-
-  // UI state
-  const [activeTab, setActiveTab] = useState<'basic' | 'interests' | 'physical' | 'sensitive'>('basic');
-
+  // Initialize form data when profile loads
   useEffect(() => {
-    if (isOpen && user) {
-      loadProfileData();
-      loadOptions();
+    if (profile) {
+      setFormData({
+        display_name: profile.display_name || '',
+        bio: profile.bio || '',
+        age: profile.age || null,
+        city: profile.city || '',
+        country: profile.country || '',
+        interests: profile.interests || [],
+        preferences: profile.preferences || [],
+        height_cm: profile.height_cm || null,
+        weight_kg: profile.weight_kg || null,
+        body_type: profile.body_type || null,
+        relationship_status: profile.relationship_status || null,
+        hiv_status: profile.hiv_status || null,
+        prep_usage: profile.prep_usage || null,
+        social_links: profile.social_links || {}
+      })
     }
-  }, [isOpen, user]);
+  }, [profile])
 
-  const loadProfileData = async () => {
-    try {
-      const result = await getCurrentUserProfile();
-      if (result.success && result.data) {
-        setProfile(result.data);
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
+  const handleInputChange = (field: keyof Profile, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleInterestsChange = (interest: string, checked: boolean) => {
+    const currentInterests = formData.interests || []
+    if (checked) {
+      handleInputChange('interests', [...currentInterests, interest])
+    } else {
+      handleInputChange('interests', currentInterests.filter(i => i !== interest))
     }
-  };
+  }
 
-  const loadOptions = async () => {
-    try {
-      const [interests, preferences] = await Promise.all([
-        getInterestCategories(),
-        getPreferenceOptions()
-      ]);
-      setInterestCategories(interests);
-      setPreferenceOptions(preferences);
-    } catch (error) {
-      console.error('Error loading options:', error);
+  const handlePreferencesChange = (preference: string, checked: boolean) => {
+    const currentPreferences = formData.preferences || []
+    if (checked) {
+      handleInputChange('preferences', [...currentPreferences, preference])
+    } else {
+      handleInputChange('preferences', currentPreferences.filter(p => p !== preference))
     }
-  };
-
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
-
-    setUploadingImage(true);
-    setError(null);
-
-    try {
-      const result = await uploadProfileImage(file, user.id);
-      if (result.success && result.url) {
-        setProfile(prev => ({
-          ...prev,
-          profile_images: [...(prev.profile_images || []), result.url]
-        }));
-      } else {
-        setError(result.error || 'Failed to upload image');
-      }
-    } catch (error) {
-      setError('Failed to upload image');
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const handleImageDelete = async (imageUrl: string) => {
-    try {
-      const result = await deleteProfileImage(imageUrl);
-      if (result.success) {
-        setProfile(prev => ({
-          ...prev,
-          profile_images: prev.profile_images?.filter(url => url !== imageUrl) || []
-        }));
-      } else {
-        setError(result.error || 'Failed to delete image');
-      }
-    } catch (error) {
-      setError('Failed to delete image');
-    }
-  };
-
-  const handleInterestToggle = (interest: string) => {
-    setProfile(prev => ({
-      ...prev,
-      interests: prev.interests?.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
-        : [...(prev.interests || []), interest]
-    }));
-  };
-
-  const handlePreferenceToggle = (preference: string) => {
-    setProfile(prev => ({
-      ...prev,
-      preferences: prev.preferences?.includes(preference)
-        ? prev.preferences.filter(p => p !== preference)
-        : [...(prev.preferences || []), preference]
-    }));
-  };
+  }
 
   const handleSocialLinkChange = (platform: string, url: string) => {
-    setProfile(prev => ({
-      ...prev,
-      social_links: {
-        ...prev.social_links,
-        [platform]: url || undefined
-      }
-    }));
-  };
+    const currentLinks = formData.social_links || {}
+    if (url.trim()) {
+      handleInputChange('social_links', { ...currentLinks, [platform]: url })
+    } else {
+      const newLinks = { ...currentLinks }
+      delete newLinks[platform]
+      handleInputChange('social_links', newLinks)
+    }
+  }
 
-  const handleSubmit = async () => {
-    if (!user) return;
+  const handleImageUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
 
-    setLoading(true);
-    setError(null);
-
+    setUploadingImages(true)
     try {
-      const result = await updateUserProfile(profile);
-      if (result.success) {
-        onProfileUpdated?.();
-        onClose();
-      } else {
-        setError(result.error || 'Failed to update profile');
+      const fileArray = Array.from(files)
+      const success = await uploadImages(fileArray)
+      if (!success) {
+        // 显示更详细的错误信息
+        const errorMessage = 'Failed to upload some images. Please check:\n' +
+          '1. File type (JPEG, PNG, WebP only)\n' +
+          '2. File size (max 5MB)\n' +
+          '3. Internet connection\n' +
+          '4. Contact support if problem persists'
+        alert(errorMessage)
       }
     } catch (error) {
-      setError('Failed to update profile');
+      console.error('Upload error:', error)
+      alert('Upload failed. Please try again or contact support.')
     } finally {
-      setLoading(false);
+      setUploadingImages(false)
     }
-  };
+  }
 
-  if (!isOpen) return null;
+  const handleImageDelete = async (imageUrl: string) => {
+    if (confirm('Are you sure you want to delete this image?')) {
+      await deleteImage(imageUrl)
+    }
+  }
 
-  const bodyTypeOptions = [
-    'slim', 'average', 'athletic', 'muscular', 'bear', 'chubby', 'stocky', 'other'
-  ];
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const success = await updateProfile(formData)
+      if (success) {
+        onSuccess?.()
+        onClose()
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
 
-  const relationshipStatusOptions = [
-    'single', 'taken', 'married', 'open', 'complicated', 'not_specified'
-  ];
+  const handleClose = () => {
+    if (saving || uploadingImages) return
+    setActiveTab('basic')
+    onClose()
+  }
 
-  const hivStatusOptions = [
-    'negative', 'positive', 'unknown', 'not_disclosed'
-  ];
+  if (!isOpen) return null
 
-  const prepUsageOptions = [
-    'on_prep', 'not_on_prep', 'considering', 'not_disclosed'
-  ];
+  const currentImages = profile?.profile_images || []
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-800 w-full max-w-4xl max-h-[90vh] overflow-hidden animate-modal-fade-in">
+      <div className="bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-700">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-800">
-          <h2 className="text-xl font-semibold text-white">Edit Profile</h2>
+        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-purple-600/20 rounded-full flex items-center justify-center">
+              <User size={20} className="text-purple-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-white">Edit Profile</h2>
+              <p className="text-gray-400 text-sm">Update your profile information</p>
+            </div>
+          </div>
           <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            onClick={handleClose}
+            disabled={saving || uploadingImages}
+            className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
           >
             <X size={24} />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-gray-800">
-          <div className="flex">
-            {[
-              { id: 'basic', label: 'Basic Info', icon: User },
-              { id: 'interests', label: 'Interests', icon: Heart },
-              { id: 'physical', label: 'Physical', icon: Ruler },
-              { id: 'sensitive', label: 'Sensitive', icon: Shield }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700'
-                }`}
-              >
-                <tab.icon size={16} />
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex border-b border-gray-700 overflow-x-auto">
+          {[
+            { id: 'basic', label: 'Basic Info', icon: User },
+            { id: 'physical', label: 'Physical', icon: User },
+            { id: 'preferences', label: 'Interests', icon: Plus },
+            { id: 'sensitive', label: 'Sensitive', icon: Lock }
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as any)}
+              className={`flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === id
+                  ? 'text-purple-400 border-b-2 border-purple-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
-          {activeTab === 'basic' && (
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-gray-400">Loading profile...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-400 mb-4">Error: {error}</p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
             <div className="space-y-6">
-              {/* Profile Images */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Profile Images (up to 6)
-                </label>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  {profile.profile_images?.map((imageUrl, index) => (
-                    <div key={index} className="relative aspect-square bg-gray-800 rounded-lg overflow-hidden">
-                      <img
-                        src={imageUrl}
-                        alt={`Profile ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        onClick={() => handleImageDelete(imageUrl)}
-                        className="absolute top-2 right-2 p-1 bg-red-600 rounded-full text-white hover:bg-red-700 transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  
-                  {(profile.profile_images?.length || 0) < 6 && (
-                    <label className="aspect-square bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center cursor-pointer hover:border-purple-500 transition-colors">
-                      <div className="text-center">
-                        {uploadingImage ? (
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mx-auto"></div>
-                        ) : (
-                          <>
-                            <Upload size={24} className="text-gray-400 mx-auto mb-2" />
-                            <span className="text-sm text-gray-400">Add Photo</span>
-                          </>
-                        )}
-                      </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                        disabled={uploadingImage}
-                      />
+              {/* Basic Info Tab */}
+              {activeTab === 'basic' && (
+                <div className="space-y-6">
+                  {/* Profile Images */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Profile Images (up to 10)
                     </label>
+                    
+                    {/* Image Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                      {currentImages.map((imageUrl, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={imageUrl}
+                            alt={`Profile ${index + 1}`}
+                            className="w-full h-32 object-cover rounded-lg border border-gray-600"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                            <button
+                              onClick={() => handleImageDelete(imageUrl)}
+                              className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-full"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          {index === 0 && (
+                            <div className="absolute top-2 left-2 px-2 py-1 bg-purple-600 text-white text-xs rounded">
+                              Main
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {/* Upload Button */}
+                      {currentImages.length < 10 && (
+                        <label className="w-full h-32 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-purple-500 transition-colors">
+                          {uploadingImages ? (
+                            <div className="w-6 h-6 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <Upload size={24} className="text-gray-400 mb-2" />
+                              <span className="text-sm text-gray-400">Add Photos</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e.target.files)}
+                            className="hidden"
+                            disabled={uploadingImages}
+                          />
+                        </label>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      First image will be your main profile photo. Max 5MB per image.
+                    </p>
+                  </div>
+
+                  {/* Display Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Display Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.display_name || ''}
+                      onChange={(e) => handleInputChange('display_name', e.target.value)}
+                      placeholder="How others see you"
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                      maxLength={50}
+                    />
+                  </div>
+
+                  {/* Bio */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Bio
+                    </label>
+                    <textarea
+                      value={formData.bio || ''}
+                      onChange={(e) => handleInputChange('bio', e.target.value)}
+                      placeholder="Tell others about yourself..."
+                      rows={4}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 resize-none"
+                      maxLength={500}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {(formData.bio || '').length}/500 characters
+                    </p>
+                  </div>
+
+                  {/* Age */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Age
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.age || ''}
+                      onChange={(e) => handleInputChange('age', e.target.value ? parseInt(e.target.value) : null)}
+                      placeholder="Your age"
+                      min="18"
+                      max="100"
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  {/* Location */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.city || ''}
+                        onChange={(e) => handleInputChange('city', e.target.value)}
+                        placeholder="Your city"
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Country
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.country || ''}
+                        onChange={(e) => handleInputChange('country', e.target.value)}
+                        placeholder="Your country"
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Physical Tab */}
+              {activeTab === 'physical' && (
+                <div className="space-y-6">
+                  {/* Height & Weight */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Height (cm)
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.height_cm || ''}
+                        onChange={(e) => handleInputChange('height_cm', e.target.value ? parseInt(e.target.value) : null)}
+                        placeholder="170"
+                        min="100"
+                        max="250"
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Weight (kg)
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.weight_kg || ''}
+                        onChange={(e) => handleInputChange('weight_kg', e.target.value ? parseInt(e.target.value) : null)}
+                        placeholder="70"
+                        min="30"
+                        max="200"
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Body Type */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Body Type
+                    </label>
+                    <select
+                      value={formData.body_type || ''}
+                      onChange={(e) => handleInputChange('body_type', e.target.value || null)}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">Select body type</option>
+                      {BODY_TYPE_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Relationship Status */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Relationship Status
+                    </label>
+                    <select
+                      value={formData.relationship_status || ''}
+                      onChange={(e) => handleInputChange('relationship_status', e.target.value || null)}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">Select status</option>
+                      {RELATIONSHIP_STATUS_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Preferences Tab */}
+              {activeTab === 'preferences' && (
+                <div className="space-y-6">
+                  {/* Interests */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Interests
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {INTERESTS_OPTIONS.map(interest => (
+                        <label key={interest} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(formData.interests || []).includes(interest)}
+                            onChange={(e) => handleInterestsChange(interest, e.target.checked)}
+                            className="rounded border-gray-600 text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-sm text-gray-300">{interest}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Preferences */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Looking For
+                    </label>
+                    <div className="space-y-2">
+                      {PREFERENCES_OPTIONS.map(preference => (
+                        <label key={preference} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(formData.preferences || []).includes(preference)}
+                            onChange={(e) => handlePreferencesChange(preference, e.target.checked)}
+                            className="rounded border-gray-600 text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-sm text-gray-300">{preference}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sensitive Tab */}
+              {activeTab === 'sensitive' && (
+                <div className="space-y-6">
+                  {/* Privacy Notice */}
+                  <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <Lock size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-yellow-300 font-medium mb-1">Sensitive Information</h4>
+                        <p className="text-yellow-200/80 text-sm">
+                          These fields are only visible to event hosts reviewing your requests 
+                          or to other approved members of the same events you attend.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Show/Hide Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Show sensitive fields</span>
+                    <button
+                      onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
+                      className="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                    >
+                      {showSensitiveInfo ? <EyeOff size={16} /> : <Eye size={16} />}
+                      <span className="text-sm">{showSensitiveInfo ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
+
+                  {showSensitiveInfo && (
+                    <>
+                      {/* HIV Status */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          HIV Status (Optional)
+                        </label>
+                        <select
+                          value={formData.hiv_status || ''}
+                          onChange={(e) => handleInputChange('hiv_status', e.target.value || null)}
+                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">Select status</option>
+                          {HIV_STATUS_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* PrEP Usage */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          PrEP Usage (Optional)
+                        </label>
+                        <select
+                          value={formData.prep_usage || ''}
+                          onChange={(e) => handleInputChange('prep_usage', e.target.value || null)}
+                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">Select usage</option>
+                          {PREP_USAGE_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Social Links */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Social Links (Optional)
+                        </label>
+                        <div className="space-y-3">
+                          {['Instagram', 'Twitter', 'LinkedIn', 'Website'].map(platform => (
+                            <div key={platform}>
+                              <label className="block text-xs text-gray-400 mb-1">{platform}</label>
+                              <input
+                                type="url"
+                                value={(formData.social_links as any)?.[platform] || ''}
+                                onChange={(e) => handleSocialLinkChange(platform, e.target.value)}
+                                placeholder={`Your ${platform} URL`}
+                                className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
-              </div>
-
-              {/* Basic Info Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    value={profile.display_name || ''}
-                    onChange={(e) => setProfile(prev => ({ ...prev, display_name: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="How others will see you"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Age
-                  </label>
-                  <input
-                    type="number"
-                    min="18"
-                    max="99"
-                    value={profile.age || ''}
-                    onChange={(e) => setProfile(prev => ({ ...prev, age: parseInt(e.target.value) || undefined }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Your age"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    value={profile.city || ''}
-                    onChange={(e) => setProfile(prev => ({ ...prev, city: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Your city"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Country
-                  </label>
-                  <input
-                    type="text"
-                    value={profile.country || ''}
-                    onChange={(e) => setProfile(prev => ({ ...prev, country: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Your country"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Bio
-                </label>
-                <textarea
-                  value={profile.bio || ''}
-                  onChange={(e) => setProfile(prev => ({ ...prev, bio: e.target.value }))}
-                  rows={4}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                  placeholder="Tell others about yourself..."
-                  maxLength={500}
-                />
-                <div className="text-right text-sm text-gray-500 mt-1">
-                  {(profile.bio || '').length}/500
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Relationship Status
-                </label>
-                <select
-                  value={profile.relationship_status || ''}
-                  onChange={(e) => setProfile(prev => ({ 
-                    ...prev, 
-                    relationship_status: e.target.value as any || null 
-                  }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="">Select status</option>
-                  {relationshipStatusOptions.map(status => (
-                    <option key={status} value={status}>
-                      {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'interests' && (
-            <div className="space-y-6">
-              {/* Interests */}
-              <div>
-                <h3 className="text-lg font-medium text-white mb-4">Interests</h3>
-                {interestCategories.map(category => (
-                  <div key={category.id} className="mb-6">
-                    <h4 className="text-md font-medium text-gray-300 mb-3">{category.category}</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {category.interests.map(interest => (
-                        <button
-                          key={interest}
-                          onClick={() => handleInterestToggle(interest)}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            profile.interests?.includes(interest)
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          }`}
-                        >
-                          {interest}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Preferences */}
-              <div>
-                <h3 className="text-lg font-medium text-white mb-4">Preferences</h3>
-                {preferenceOptions.map(category => (
-                  <div key={category.id} className="mb-6">
-                    <h4 className="text-md font-medium text-gray-300 mb-3">{category.category}</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {category.options.map(option => (
-                        <button
-                          key={option}
-                          onClick={() => handlePreferenceToggle(option)}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            profile.preferences?.includes(option)
-                              ? 'bg-pink-600 text-white'
-                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'physical' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Height (cm)
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="250"
-                    value={profile.height_cm || ''}
-                    onChange={(e) => setProfile(prev => ({ 
-                      ...prev, 
-                      height_cm: parseInt(e.target.value) || undefined 
-                    }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Your height in cm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Weight (kg)
-                  </label>
-                  <input
-                    type="number"
-                    min="30"
-                    max="300"
-                    value={profile.weight_kg || ''}
-                    onChange={(e) => setProfile(prev => ({ 
-                      ...prev, 
-                      weight_kg: parseInt(e.target.value) || undefined 
-                    }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Your weight in kg"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Body Type
-                </label>
-                <select
-                  value={profile.body_type || ''}
-                  onChange={(e) => setProfile(prev => ({ 
-                    ...prev, 
-                    body_type: e.target.value as any || null 
-                  }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="">Select body type</option>
-                  {bodyTypeOptions.map(type => (
-                    <option key={type} value={type}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'sensitive' && (
-            <div className="space-y-6">
-              {/* Warning */}
-              <div className="bg-yellow-900/30 border border-yellow-800/50 rounded-lg p-4 flex items-start space-x-3">
-                <AlertTriangle size={20} className="text-yellow-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-yellow-200 font-medium">Sensitive Information</p>
-                  <p className="text-yellow-300/80 text-sm mt-1">
-                    This information is only visible to event hosts reviewing your request or approved members of the same event.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    HIV Status
-                  </label>
-                  <select
-                    value={profile.hiv_status || ''}
-                    onChange={(e) => setProfile(prev => ({ 
-                      ...prev, 
-                      hiv_status: e.target.value as any || null 
-                    }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="">Select status</option>
-                    {hivStatusOptions.map(status => (
-                      <option key={status} value={status}>
-                        {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    PrEP Usage
-                  </label>
-                  <select
-                    value={profile.prep_usage || ''}
-                    onChange={(e) => setProfile(prev => ({ 
-                      ...prev, 
-                      prep_usage: e.target.value as any || null 
-                    }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="">Select usage</option>
-                    {prepUsageOptions.map(usage => (
-                      <option key={usage} value={usage}>
-                        {usage.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Social Links */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Social Links (Optional)
-                </label>
-                <div className="space-y-3">
-                  {['Instagram', 'Twitter', 'TikTok', 'Snapchat'].map(platform => (
-                    <div key={platform}>
-                      <label className="block text-xs text-gray-400 mb-1">{platform}</label>
-                      <input
-                        type="url"
-                        value={(profile.social_links as any)?.[platform.toLowerCase()] || ''}
-                        onChange={(e) => handleSocialLinkChange(platform.toLowerCase(), e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        placeholder={`Your ${platform} profile URL`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-900/30 border border-red-800/50 rounded-lg p-4 flex items-start space-x-3 mt-6">
-              <AlertTriangle size={20} className="text-red-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-red-200 font-medium">Error</p>
-                <p className="text-red-300/80 text-sm mt-1">{error}</p>
-              </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end space-x-3 p-6 border-t border-gray-800">
+        <div className="flex items-center justify-between p-6 border-t border-gray-700">
           <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
-            disabled={loading}
+            onClick={handleClose}
+            disabled={saving || uploadingImages}
+            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:transform-none"
+            onClick={handleSave}
+            disabled={saving || uploadingImages || !profile}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all disabled:opacity-50"
           >
-            {loading ? (
+            {saving ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                 <span>Saving...</span>
               </>
             ) : (
               <>
                 <Save size={16} />
-                <span>Save Profile</span>
+                <span>Save Changes</span>
               </>
             )}
           </button>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default EditProfileModal;
+export default EditProfileModal
