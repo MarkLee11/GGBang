@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Upload, Trash2, Plus, User, Lock, Eye, EyeOff, Save } from 'lucide-react'
+import { X, Upload, Trash2, Plus, User, Lock, Eye, EyeOff, Save, Move } from 'lucide-react'
 import { useProfile } from '../hooks/useProfile'
 import { type Profile } from '../lib/supabase'
 
@@ -7,6 +7,9 @@ interface EditProfileModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
+  user?: any
+  userProfile?: any
+  onProfileUpdated?: () => void
 }
 
 // Predefined options for dropdowns
@@ -58,7 +61,10 @@ const PREP_USAGE_OPTIONS = [
 const EditProfileModal: React.FC<EditProfileModalProps> = ({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  user,
+  userProfile,
+  onProfileUpdated
 }) => {
   const { profile, loading, error, updateProfile, uploadImages, deleteImage } = useProfile()
   
@@ -67,28 +73,30 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [saving, setSaving] = useState(false)
   const [uploadingImages, setUploadingImages] = useState(false)
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(false)
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null)
 
-  // Initialize form data when profile loads
+  // Initialize form data when profile loads or when userProfile changes
   useEffect(() => {
-    if (profile) {
+    const profileData = userProfile || profile;
+    if (profileData) {
       setFormData({
-        display_name: profile.display_name || '',
-        bio: profile.bio || '',
-        age: profile.age || null,
-        city: profile.city || '',
-        country: profile.country || '',
-        interests: profile.interests || [],
-        preferences: profile.preferences || [],
-        height_cm: profile.height_cm || null,
-        weight_kg: profile.weight_kg || null,
-        body_type: profile.body_type || null,
-        relationship_status: profile.relationship_status || null,
-        hiv_status: profile.hiv_status || null,
-        prep_usage: profile.prep_usage || null,
-        social_links: profile.social_links || {}
+        display_name: profileData.display_name || '',
+        bio: profileData.bio || '',
+        age: profileData.age || null,
+        city: profileData.city || '',
+        country: profileData.country || '',
+        interests: profileData.interests || [],
+        preferences: profileData.preferences || [],
+        height_cm: profileData.height_cm || null,
+        weight_kg: profileData.weight_kg || null,
+        body_type: profileData.body_type || null,
+        relationship_status: profileData.relationship_status || null,
+        hiv_status: profileData.hiv_status || null,
+        prep_usage: profileData.prep_usage || null,
+        social_links: profileData.social_links || {}
       })
     }
-  }, [profile])
+  }, [profile, userProfile])
 
   const handleInputChange = (field: keyof Profile, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -153,12 +161,61 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   }
 
+  // Handle drag start
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedImageIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  // Handle drag over
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  // Handle drop to reorder images
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+    
+    if (draggedImageIndex === null || draggedImageIndex === dropIndex) {
+      setDraggedImageIndex(null)
+      return
+    }
+
+    const currentImages = profile?.profile_images || []
+    if (currentImages.length === 0) return
+
+    // Create new array with reordered images
+    const newImages = [...currentImages]
+    const [draggedImage] = newImages.splice(draggedImageIndex, 1)
+    newImages.splice(dropIndex, 0, draggedImage)
+
+    // Update profile with new image order
+    try {
+      const success = await updateProfile({ profile_images: newImages })
+      if (success) {
+        // Update local state immediately for better UX
+        // The useProfile hook will handle the state update
+      }
+    } catch (error) {
+      console.error('Failed to reorder images:', error)
+    }
+
+    setDraggedImageIndex(null)
+  }
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setDraggedImageIndex(null)
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
       const success = await updateProfile(formData)
       if (success) {
         onSuccess?.()
+        onProfileUpdated?.()
         onClose()
       }
     } catch (error) {
@@ -252,14 +309,28 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
                       Profile Images (up to 10)
                     </label>
                     
+                    <p className="text-xs text-gray-500 mb-3">
+                      Drag and drop images to reorder them. The first image will be your main profile photo. Max 5MB per image.
+                    </p>
+                    
                     {/* Image Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                       {currentImages.map((imageUrl, index) => (
-                        <div key={index} className="relative group">
+                        <div 
+                          key={index} 
+                          className={`relative group cursor-move ${
+                            draggedImageIndex === index ? 'opacity-50' : ''
+                          }`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, index)}
+                          onDragEnd={handleDragEnd}
+                        >
                           <img
                             src={imageUrl}
                             alt={`Profile ${index + 1}`}
-                            className="w-full h-32 object-cover rounded-lg border border-gray-600"
+                            className="w-full h-32 object-cover rounded-lg border border-gray-600 pointer-events-none"
                           />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                             <button
@@ -274,6 +345,9 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
                               Main
                             </div>
                           )}
+                          <div className="absolute top-2 right-2 p-1 bg-gray-800/80 rounded-full">
+                            <Move size={12} className="text-gray-300" />
+                          </div>
                         </div>
                       ))}
                       
@@ -299,9 +373,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
                         </label>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">
-                      First image will be your main profile photo. Max 5MB per image.
-                    </p>
                   </div>
 
                   {/* Display Name */}

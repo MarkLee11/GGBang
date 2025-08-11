@@ -172,40 +172,23 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onCreateEventClick }) =
     }
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
 
-  const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
-  const userEmail = user?.email || '';
 
   return (
     <div className="min-h-screen bg-black pt-20">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header Section */}
+        
+        {/* Page Title Banner */}
         <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-6">
-            {/* Profile Picture */}
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-xl font-bold">
-              {getInitials(userName)}
-            </div>
-            
-            {/* User Info */}
-            <div>
-              <h1 className="text-2xl font-bold text-white">{userName}</h1>
-              <p className="text-gray-400">{userEmail}</p>
-            </div>
-          </div>
+          <h1 className="text-4xl font-bold text-white text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            My Events
+          </h1>
+          <div className="w-24 h-1 bg-gradient-to-r from-purple-600 to-pink-600 mx-auto mt-2 rounded-full"></div>
         </div>
 
         {/* Tab Navigation */}
         <div className="mb-8">
-          <div className="flex space-x-0 bg-gray-900/50 rounded-lg p-1 max-w-md">
+          <div className="flex space-x-0 bg-gray-900/50 rounded-lg p-1 w-full">
             <button
               onClick={() => setActiveTab('attending')}
               className={`flex-1 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${

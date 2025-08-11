@@ -97,14 +97,14 @@ export async function uploadProfileImage(
     console.log('Uploading file:', filename, 'for user:', userId)
     
     // Check if storage bucket exists
-    const { data: bucket, error: bucketError } = await supabase.storage.getBucket('profile-images')
+    /*const { data: bucket, error: bucketError } = await supabase.storage.getBucket('profile-images')
     if (bucketError) {
       console.error('Bucket error:', bucketError)
       return { 
         success: false, 
         error: 'Storage bucket not found. Please contact administrator.' 
       }
-    }
+    } */
     
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage

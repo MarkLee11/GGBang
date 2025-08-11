@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, User, Calendar, Plus, LogIn, LogOut } from 'lucide-react';
+import { Menu, User, Calendar, Plus, LogIn, LogOut, Star } from 'lucide-react';
 import { authService } from '../lib/auth';
 
 interface NavigationProps {
@@ -9,11 +9,12 @@ interface NavigationProps {
   onJoinClick: () => void;
   onCommunityClick: () => void;
   onAboutClick: () => void;
-  onEditProfileClick: () => void;
+  onMyEventsClick: () => void;
+  onMyProfileClick: () => void;
   user?: any;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ onCreateEventClick, onSignInClick, onJoinClick, onCommunityClick, onAboutClick, onEditProfileClick, user }) => {
+const Navigation: React.FC<NavigationProps> = ({ onCreateEventClick, onSignInClick, onJoinClick, onCommunityClick, onAboutClick, onMyEventsClick, onMyProfileClick, user }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -92,12 +93,20 @@ const Navigation: React.FC<NavigationProps> = ({ onCreateEventClick, onSignInCli
             {user ? (
               <div className="hidden md:flex items-center space-x-4">
                 <button
-                  onClick={onEditProfileClick}
+                  onClick={onMyProfileClick}
                   className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors duration-200 bg-gray-800/50 hover:bg-gray-700/50 px-3 py-2 rounded-lg border border-gray-700 hover:border-purple-500/30"
                 >
                   <User size={18} />
-                  <span>Edit Profile</span>
+                  <span>My Profile</span>
                 </button>
+                <button
+                  onClick={onMyEventsClick}
+                  className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors duration-200 bg-gray-800/50 hover:bg-gray-700/50 px-3 py-2 rounded-lg border border-gray-700 hover:border-purple-500/30"
+                >
+                  <Star size={18} />
+                  <span>My Events</span>
+                </button>
+
                 <button
                   onClick={handleSignOut}
                   className="flex items-center space-x-2 text-gray-300 hover:text-red-400 transition-colors duration-200 bg-gray-800/50 hover:bg-red-900/20 px-3 py-2 rounded-lg border border-gray-700 hover:border-red-500/30"

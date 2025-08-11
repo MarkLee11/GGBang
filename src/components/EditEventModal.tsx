@@ -149,7 +149,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onEven
           organizer: formData.organizer,
           category: formData.category,
           image: imageUrl,
-          user_id: user.id  // Always update with current user's UID
+          user_id: user.id,  // Always update with current user's UID
+          place_hint: formData.location,  // Update place hint with new location
+          // Note: capacity, place_exact, and place_exact_visible are not updated here
+          // as they are typically managed separately through other interfaces
         })
         .eq('id', event.id);
 

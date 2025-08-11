@@ -5,6 +5,7 @@ import { formatEventDate, formatEventTime } from '../utils/dateUtils'
 import { type Event } from '../lib/supabase'
 import { unlockEventLocation } from '../lib/api'
 import { useUserEventStatus } from '../hooks/useUserEventStatus'
+import { useJoinRequest } from '../hooks/useJoinRequest'
 import { JoinRequestModal } from './JoinRequestModal'
 import { HostRequestsPanel } from './HostRequestsPanel'
 import { UserStatusBadge, JoinButton } from './UserStatusBadge'
@@ -36,13 +37,9 @@ const EventModal: React.FC<EventModalProps> = ({
 
   const isHost = user && event?.user_id === user.id
 
-  // 兼容不同 hook 版本：安全地获取 refreshStatus（可能不存在）
-  const statusHook = useUserEventStatus(event?.id || null)
-  const userStatus = (statusHook as any)?.status ?? 'none'
-  const statusLoading = (statusHook as any)?.loading ?? false
-  const refreshStatus = typeof (statusHook as any)?.refreshStatus === 'function'
-    ? (statusHook as any).refreshStatus
-    : undefined
+  // 使用改进后的hook
+  const { status: userStatus, loading: statusLoading, refreshStatus, requestId } = useUserEventStatus(event?.id || null)
+  const { withdrawRequest } = useJoinRequest()
 
   useEffect(() => {
     if (!isOpen) {
@@ -75,7 +72,6 @@ const EventModal: React.FC<EventModalProps> = ({
       const result = await unlockEventLocation(event.id)
       if (result.success) {
         onAttendanceChanged?.()
-        // 有就调，无就算
         refreshStatus?.()
       } else {
         setUnlockError(result.error || 'Failed to unlock location')
@@ -89,7 +85,6 @@ const EventModal: React.FC<EventModalProps> = ({
 
   // JoinRequestModal 成功后的回调
   const handleJoinRequestSuccess = () => {
-    // 不再强制依赖 refreshStatus，避免 “不是函数” 报错
     refreshStatus?.()
     onAttendanceChanged?.()
   }
@@ -99,11 +94,27 @@ const EventModal: React.FC<EventModalProps> = ({
     onAttendanceChanged?.()
   }
 
-  // 是否可见 exact location
+  // Handle withdraw request
+  const handleWithdrawRequest = async () => {
+    if (!requestId) return
+    
+    const success = await withdrawRequest(requestId)
+    if (success) {
+      refreshStatus?.()
+      onAttendanceChanged?.()
+    }
+  }
+
   const canSeeExactLocation = () => {
-    if (!event || !event.place_exact) return false
-    if (!event.place_exact_visible) return false
+    if (!event) return false
+    
+    // Host can always see exact location
     if (isHost) return true
+    
+    // Location is unlocked for everyone
+    if (event.place_exact_visible) return true
+    
+    // User is approved/attending
     return userStatus === 'approved' || userStatus === 'attending'
   }
 
@@ -114,80 +125,60 @@ const EventModal: React.FC<EventModalProps> = ({
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-gray-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-700">
           {/* Header */}
-          <div className="relative">
-            {event.image && (
-              <div className="h-64 bg-gray-800 overflow-hidden">
-                <img
-                  src={event.image}
-                  alt={event.title}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent" />
-              </div>
-            )}
-            
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
-              aria-label="Close modal"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="absolute bottom-4 left-6 right-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h2 className="text-3xl font-bold text-white mb-2">{event.title}</h2>
-                  <div className="flex flex-wrap items-center gap-4 text-gray-300">
-                    <div className="flex items-center space-x-2">
-                      <Calendar size={16} />
-                      <span>{formatEventDate(event.date)}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Clock size={16} />
-                      <span>{formatEventTime(event.time)}</span>
-                    </div>
-                    {event.capacity && (
-                      <div className="flex items-center space-x-2">
-                        <Users size={16} />
-                        <span>{event.capacity} spots</span>
-                      </div>
-                    )}
+          <div className="flex items-center justify-between p-6 border-b border-gray-700">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-white mb-2">{event.title}</h2>
+              <div className="flex items-center space-x-4 text-gray-400">
+                <div className="flex items-center space-x-2">
+                  <Calendar size={16} />
+                  <span>{formatEventDate(event.date)}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Clock size={16} />
+                  <span>{formatEventTime(event.time)}</span>
+                </div>
+                {event.capacity && (
+                  <div className="flex items-center space-x-2">
+                    <Users size={16} />
+                    <span>Capacity: {event.capacity}</span>
                   </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex items-center space-x-3 ml-4">
-                  {isHost ? (
-                    <button
-                      onClick={() => onEditClick?.(event)}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                    >
-                      <Settings size={16} />
-                      <span>Edit Event</span>
-                    </button>
-                  ) : (
-                    <JoinButton
-                      status={userStatus}
-                      onRequestClick={() => setIsJoinRequestModalOpen(true)}
-                      onLoginClick={() => onJoinClick?.()}
-                      isAuthenticated={!!user}
-                      disabled={statusLoading}
-                    />
-                  )}
-                </div>
+                )}
               </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              {/* User Status Badge */}
+              {user && !isHost && (
+                <UserStatusBadge 
+                  status={userStatus} 
+                  className="mr-2"
+                />
+              )}
+              
+              {/* Join Button */}
+              {user && !isHost && (
+                <JoinButton
+                  status={userStatus}
+                  onRequestClick={() => setIsJoinRequestModalOpen(true)}
+                  onLoginClick={() => onJoinClick?.()}
+                  onWithdrawClick={handleWithdrawRequest}
+                  isAuthenticated={!!user}
+                  requestId={requestId}
+                />
+              )}
+              
+              {/* Close Button */}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                <X size={24} />
+              </button>
             </div>
           </div>
 
-          {/* Status Badge */}
-          {user && !isHost && (
-            <div className="px-6 pt-4">
-              <UserStatusBadge status={userStatus} />
-            </div>
-          )}
-
-          {/* Tabs */}
+          {/* Tab Navigation */}
           <div className="flex border-b border-gray-700">
             <button
               onClick={() => setActiveTab('details')}
@@ -195,8 +186,7 @@ const EventModal: React.FC<EventModalProps> = ({
                 activeTab === 'details'
                   ? 'text-purple-400 border-b-2 border-purple-400'
                   : 'text-gray-400 hover:text-white'
-              }`}
-            >
+              }`}>
               Event Details
             </button>
             {isHost && (

@@ -69,12 +69,12 @@ export const authService = {
         throw error
       }
 
-      // Redirect to profile page after successful sign in
-      if (data.user) {
-        setTimeout(() => {
-          window.location.href = '/profile'
-        }, 100)
-      }
+      // 移除自动重定向，让用户登录后停留在当前页面
+      // if (data.user) {
+      //   setTimeout(() => {
+      //     window.location.href = '/profile'
+      //   }, 100)
+      // }
 
       return { user: data.user, error: null }
     } catch (error) {

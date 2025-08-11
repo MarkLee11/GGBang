@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import Hero from './components/Hero';
 import EventGrid from './components/EventGrid';
 import UserProfile from './components/UserProfile';
+import MyProfile from './components/MyProfile';
 import CreateEventModal from './components/CreateEventModal';
 import EditProfileModal from './components/EditProfileModal';
 import SignupModal from './components/SignupModal';
@@ -54,9 +55,7 @@ function App() {
     setIsCreateEventModalOpen(true);
   };
 
-  const handleEditProfileClick = () => {
-    setIsEditProfileModalOpen(true);
-  };
+
 
   const handleCloseCreateEventModal = () => {
     setIsCreateEventModalOpen(false);
@@ -76,6 +75,14 @@ function App() {
 
   const handleAboutClick = () => {
     setIsAboutModalOpen(true);
+  };
+
+  const handleMyEventsClick = () => {
+    navigate('/my_events');
+  };
+
+  const handleMyProfileClick = () => {
+    navigate('/my_profile');
   };
 
   const handleCloseAboutModal = () => {
@@ -151,7 +158,8 @@ function App() {
         onJoinClick={handleJoinClick} 
         onCommunityClick={handleCommunityClick}
         onAboutClick={handleAboutClick}
-        onEditProfileClick={handleEditProfileClick}
+        onMyEventsClick={handleMyEventsClick}
+        onMyProfileClick={handleMyProfileClick}
         user={user} 
       />
       
@@ -195,8 +203,8 @@ function App() {
             </footer>
           </>
         } />
-        <Route path="/profile" element={<UserProfile user={user} onCreateEventClick={handleCreateEventClick} />} />
-        <Route path="/profile" element={<UserProfile user={user} onCreateEventClick={handleCreateEventClick} />} />
+        <Route path="/my_events" element={<UserProfile user={user} onCreateEventClick={handleCreateEventClick} />} />
+        <Route path="/my_profile" element={<MyProfile user={user} onCreateEventClick={handleCreateEventClick} />} />
         <Route path="/debug" element={
           <div className="min-h-screen bg-black text-white p-8">
             <h1>Debug Info</h1>

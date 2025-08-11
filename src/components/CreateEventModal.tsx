@@ -131,7 +131,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ isOpen, onClose, on
             organizer: organizerName,
             category: formData.category,
             image: imageUrl,
-            user_id: user.id  // Always insert the authenticated user's UID
+            user_id: user.id,  // Always insert the authenticated user's UID
+            capacity: 6,  // Default capacity for small gay outings
+            place_hint: formData.location,  // Use location as place hint
+            place_exact: null,  // No exact location initially
+            place_exact_visible: false  // Exact location not visible initially
           }
         ]);
 

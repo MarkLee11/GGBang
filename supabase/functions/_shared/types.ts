@@ -3,12 +3,18 @@ export interface Event {
   id: number
   user_id: string
   title: string
+  description: string | null
   capacity: number | null
   place_hint: string | null
   place_exact: string | null
   place_exact_visible: boolean
   date: string
   time: string
+  location: string
+  country: string
+  organizer: string
+  category: string
+  image: string | null
   created_at: string
   updated_at: string
 }

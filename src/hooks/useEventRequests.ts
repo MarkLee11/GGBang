@@ -6,6 +6,7 @@ export interface JoinRequestWithProfile {
   event_id: number
   requester_id: string
   message: string | null
+  note: string | null
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
   updated_at: string
@@ -62,6 +63,8 @@ export function useEventRequests(eventId: number | null, isHost: boolean): UseEv
     setError(null)
 
     try {
+      console.log('🔍 Fetching join requests for event:', eventId)
+      
       // Fetch join requests with profile information
       const { data: requestsData, error: requestsError } = await supabase
         .from('join_requests')
@@ -70,6 +73,7 @@ export function useEventRequests(eventId: number | null, isHost: boolean): UseEv
           event_id,
           requester_id,
           message,
+          note,
           status,
           created_at,
           updated_at,
@@ -97,8 +101,11 @@ export function useEventRequests(eventId: number | null, isHost: boolean): UseEv
         .order('created_at', { ascending: false })
 
       if (requestsError) {
+        console.error('❌ Error fetching join requests:', requestsError)
         throw requestsError
       }
+
+      console.log('✅ Join requests fetched:', requestsData?.length || 0)
 
       // Fetch event capacity info
       const { data: eventData, error: eventError } = await supabase
@@ -108,8 +115,11 @@ export function useEventRequests(eventId: number | null, isHost: boolean): UseEv
         .single()
 
       if (eventError) {
+        console.error('❌ Error fetching event data:', eventError)
         throw eventError
       }
+
+      console.log('✅ Event data fetched:', eventData)
 
       // Count current attendees
       const { count: attendeeCount, error: attendeeError } = await supabase
@@ -118,24 +128,50 @@ export function useEventRequests(eventId: number | null, isHost: boolean): UseEv
         .eq('event_id', eventId)
 
       if (attendeeError) {
+        console.error('❌ Error counting attendees:', attendeeError)
         throw attendeeError
       }
+
+      console.log('✅ Attendee count:', attendeeCount)
 
       // Count requests by status
       const pendingCount = requestsData?.filter(r => r.status === 'pending').length || 0
       const approvedCount = requestsData?.filter(r => r.status === 'approved').length || 0
 
-      setRequests(requestsData || [])
-      setCapacityInfo({
+      const capacityInfoData = {
         capacity: eventData?.capacity || null,
         currentAttendees: attendeeCount || 0,
         pendingRequests: pendingCount,
         approvedRequests: approvedCount
-      })
+      }
+
+      console.log('✅ Capacity info:', capacityInfoData)
+
+      setRequests(requestsData || [])
+      setCapacityInfo(capacityInfoData)
 
     } catch (err) {
-      console.error('Error fetching event requests:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch requests')
+      console.error('❌ Error in fetchRequests:', err)
+      let errorMessage = 'Failed to fetch requests'
+      
+      if (err instanceof Error) {
+        errorMessage = err.message
+      } else if (typeof err === 'object' && err !== null) {
+        // 处理 Supabase 错误对象
+        if ('message' in err) {
+          errorMessage = String(err.message)
+        } else if ('error' in err) {
+          errorMessage = String(err.error)
+        } else {
+          errorMessage = JSON.stringify(err)
+        }
+      }
+      
+      setError(errorMessage)
+      
+      // Set empty data on error to prevent UI from showing wrong state
+      setRequests([])
+      setCapacityInfo(null)
     } finally {
       setLoading(false)
     }

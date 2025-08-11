@@ -1,5 +1,5 @@
 import React from 'react'
-import { Clock, CheckCircle, XCircle, Users } from 'lucide-react'
+import { Clock, CheckCircle, XCircle, Users, Undo2 } from 'lucide-react'
 import { UserEventStatus } from '../hooks/useUserEventStatus'
 
 interface UserStatusBadgeProps {
@@ -74,18 +74,22 @@ interface JoinButtonProps {
   status: UserEventStatus
   onRequestClick: () => void
   onLoginClick: () => void
+  onWithdrawClick?: () => void
   isAuthenticated: boolean
   disabled?: boolean
   className?: string
+  requestId?: number
 }
 
 export const JoinButton: React.FC<JoinButtonProps> = ({
   status,
   onRequestClick,
   onLoginClick,
+  onWithdrawClick,
   isAuthenticated,
   disabled = false,
-  className = ''
+  className = '',
+  requestId
 }) => {
   const getButtonConfig = () => {
     if (!isAuthenticated) {
@@ -93,7 +97,8 @@ export const JoinButton: React.FC<JoinButtonProps> = ({
         text: 'Log In to Join',
         onClick: onLoginClick,
         className: 'bg-purple-600 hover:bg-purple-700 text-white',
-        disabled: false
+        disabled: false,
+        showWithdraw: false
       }
     }
 
@@ -103,42 +108,48 @@ export const JoinButton: React.FC<JoinButtonProps> = ({
           text: 'Request to Join',
           onClick: onRequestClick,
           className: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white',
-          disabled: false
+          disabled: false,
+          showWithdraw: false
         }
       case 'pending':
         return {
           text: 'Request Pending',
           onClick: () => {},
           className: 'bg-yellow-600/20 border border-yellow-500/40 text-yellow-300 cursor-not-allowed',
-          disabled: true
+          disabled: true,
+          showWithdraw: true
         }
       case 'approved':
         return {
-          text: 'Approved',
+          text: 'Approved - Attending',
           onClick: () => {},
           className: 'bg-green-600/20 border border-green-500/40 text-green-300 cursor-not-allowed',
-          disabled: true
+          disabled: true,
+          showWithdraw: false
         }
       case 'rejected':
         return {
           text: 'Request Rejected',
-          onClick: () => {},
-          className: 'bg-red-600/20 border border-red-500/40 text-red-300 cursor-not-allowed',
-          disabled: true
+          onClick: onRequestClick, // Allow re-applying
+          className: 'bg-red-600/20 border border-red-500/40 text-red-300 hover:bg-red-600/30 hover:border-red-500/60',
+          disabled: false,
+          showWithdraw: false
         }
       case 'attending':
         return {
           text: 'Attending',
           onClick: () => {},
           className: 'bg-blue-600/20 border border-blue-500/40 text-blue-300 cursor-not-allowed',
-          disabled: true
+          disabled: true,
+          showWithdraw: false
         }
       default:
         return {
           text: 'Request to Join',
           onClick: onRequestClick,
           className: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white',
-          disabled: false
+          disabled: false,
+          showWithdraw: false
         }
     }
   }
@@ -146,15 +157,28 @@ export const JoinButton: React.FC<JoinButtonProps> = ({
   const config = getButtonConfig()
 
   return (
-    <button
-      onClick={config.onClick}
-      disabled={disabled || config.disabled}
-      className={`
-        px-6 py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed
-        ${config.className} ${className}
-      `}
-    >
-      {config.text}
-    </button>
+    <div className="flex flex-col space-y-2">
+      <button
+        onClick={config.onClick}
+        disabled={disabled || config.disabled}
+        className={`
+          px-6 py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed
+          ${config.className} ${className}
+        `}
+      >
+        {config.text}
+      </button>
+      
+      {/* Withdraw Button for Pending Requests */}
+      {config.showWithdraw && onWithdrawClick && requestId && (
+        <button
+          onClick={onWithdrawClick}
+          className="px-4 py-2 text-sm bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 hover:text-gray-200 border border-gray-500/40 hover:border-gray-500/60 rounded-lg transition-all flex items-center justify-center space-x-2"
+        >
+          <Undo2 size={14} />
+          <span>Withdraw Request</span>
+        </button>
+      )}
+    </div>
   )
 }

@@ -92,8 +92,8 @@ export function useProfile() {
       // Get current profile images
       const currentImages = profile?.profile_images || []
       
-      // Add new image URLs to the beginning (newest first)
-      const updatedImages = [...result.urls, ...currentImages]
+      // Add new image URLs to the end (preserve current order)
+      const updatedImages = [...currentImages, ...result.urls]
       
       // Limit to 10 images maximum
       const finalImages = updatedImages.slice(0, 10)
