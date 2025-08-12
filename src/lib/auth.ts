@@ -109,18 +109,38 @@ export const authService = {
     }
 
     try {
-      const { data: { user }, error } = await supabase.auth.getUser()
+      // 首先检查是否有活跃的会话
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
-      if (error) {
-        // Handle all auth errors gracefully - don't throw
-        console.warn('Auth error (handled gracefully):', error.message)
+      if (sessionError) {
+        console.warn('Session error:', sessionError.message)
         return { user: null, error: null }
       }
       
+      if (!session) {
+        console.log('No active session found')
+        return { user: null, error: null }
+      }
+      
+      // 如果有会话，获取用户信息
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError) {
+        console.warn('User error:', userError.message)
+        return { user: null, error: null }
+      }
+      
+      if (!user) {
+        console.log('No user found in session')
+        return { user: null, error: null }
+      }
+      
+      console.log('User authenticated successfully:', user.email)
       return { user, error: null }
+      
     } catch (error) {
       // Handle network errors gracefully - don't throw
-      console.warn('Network error (handled gracefully):', error)
+      console.warn('Network error in getCurrentUser:', error)
       return { user: null, error: null }
     }
   },

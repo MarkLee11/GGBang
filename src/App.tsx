@@ -34,15 +34,34 @@ function App() {
   // Check for existing user session on app load
   useEffect(() => {
     const checkUser = async () => {
-      const { user } = await authService.getCurrentUser();
-      setUser(user);
-      setIsLoading(false);
+      try {
+        console.log('🔍 Checking user session...')
+        const { user, error } = await authService.getCurrentUser();
+        
+        if (error) {
+          console.warn('⚠️ User check error:', error)
+        }
+        
+        if (user) {
+          console.log('✅ User authenticated:', user.email)
+        } else {
+          console.log('ℹ️ No user authenticated')
+        }
+        
+        setUser(user);
+      } catch (err) {
+        console.error('❌ Error in checkUser:', err)
+        setUser(null)
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     checkUser();
 
     // Listen for auth state changes
     const { data: { subscription } } = authService.onAuthStateChange((user) => {
+      console.log('🔄 Auth state changed:', user ? user.email : 'No user')
       setUser(user);
     });
 

@@ -210,6 +210,19 @@ const EventModal: React.FC<EventModalProps> = ({
           <div className="p-6 max-h-[60vh] overflow-y-auto">
             {activeTab === 'details' ? (
               <div className="space-y-6">
+                {/* Edit Button for Host */}
+                {isHost && onEditClick && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => onEditClick(event)}
+                      className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-105 hover:shadow-lg hover:shadow-purple-500/25 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                    >
+                      <Settings size={16} className="mr-2" />
+                      Edit Event
+                    </button>
+                  </div>
+                )}
+
                 {/* Description */}
                 {event.description && (
                   <div>

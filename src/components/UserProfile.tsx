@@ -3,6 +3,7 @@ import { User, Calendar, MapPin, Clock, Tag, Eye, Plus } from 'lucide-react';
 import { supabase, type Event } from '../lib/supabase';
 import { formatEventDate, formatEventTime } from '../utils/dateUtils';
 import EventModal from './EventModal';
+import EditEventModal from './EditEventModal'; // Added import for EditEventModal
 
 interface UserProfileProps {
   user: any;
@@ -17,6 +18,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onCreateEventClick }) =
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // Added state for edit modal
+  const [eventToEdit, setEventToEdit] = useState<Event | null>(null); // Added state for event to edit
 
   // Fetch user's attending events
   useEffect(() => {
@@ -446,10 +449,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onCreateEventClick }) =
             // Close the current modal first
             setIsEventModalOpen(false);
             setSelectedEvent(null);
-            // Then trigger the create event modal (which can be used for editing)
-            if (onCreateEventClick) {
-              onCreateEventClick();
-            }
+            // Open edit modal with the selected event
+            setEventToEdit(event);
+            setIsEditModalOpen(true);
           }}
           onEventDeleted={handleEventDeleted}
           onAttendanceChanged={refreshEvents}
@@ -460,6 +462,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onCreateEventClick }) =
           }}
         />
       )}
+
+      {/* Edit Event Modal */}
+      <EditEventModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEventToEdit(null);
+        }}
+        event={eventToEdit}
+        onEventUpdated={() => {
+          refreshEvents();
+          setIsEditModalOpen(false);
+          setEventToEdit(null);
+        }}
+      />
     </div>
   );
 };
