@@ -36,6 +36,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onEven
         description: event.description || '',
         date: event.date || '',
         time: event.time || '',
+        time: (event.time || '').slice(0, 5),
         location: event.location || '',
         country: event.country || 'United States',
         organizer: event.organizer || '',
@@ -282,6 +283,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onEven
                   name="time"
                   value={formData.time}
                   onChange={handleInputChange}
+                  step={60}
                   required
                   className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 />

@@ -4,7 +4,8 @@ import { X, MapPin, Calendar, Clock, User, Tag, Users, Settings, MessageSquare, 
 import { formatEventDate, formatEventTime } from '../utils/dateUtils'
 import { type Event } from '../lib/supabase'
 import { unlockEventLocation } from '../lib/api'
-import { useUserEventStatus } from '../hooks/useUserEventStatus'
+//import { useUserEventStatus } from '../hooks/useUserEventStatus'//
+import { useEventStatus } from '../hooks/useEventStatus'
 import { useJoinRequest } from '../hooks/useJoinRequest'
 import { JoinRequestModal } from './JoinRequestModal'
 import { HostRequestsPanel } from './HostRequestsPanel'
@@ -38,7 +39,8 @@ const EventModal: React.FC<EventModalProps> = ({
   const isHost = user && event?.user_id === user.id
 
   // 使用改进后的hook
-  const { status: userStatus, loading: statusLoading, refreshStatus, requestId } = useUserEventStatus(event?.id || null)
+  //const { status: userStatus, loading: statusLoading, refreshStatus, requestId } = useUserEventStatus(event?.id || null)
+  const { status: userStatus, loading: statusLoading, refreshStatus, requestId } = useEventStatus(event?.id || null)
   const { withdrawRequest } = useJoinRequest()
 
   useEffect(() => {
