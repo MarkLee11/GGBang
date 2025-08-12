@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { submitJoinRequest, approveJoinRequest, rejectJoinRequest, withdrawJoinRequest } from '../lib/api'
 import { useNotifications } from './useNotifications'
 import { formatDateForAI, formatTimeForAI } from '../lib/aiCopy'
-
+import { supabase } from '../lib/supabase';
 export interface UseJoinRequestResult {
   loading: boolean
   error: string | null
@@ -11,12 +11,12 @@ export interface UseJoinRequestResult {
   clearError: () => void
 }
 
-export function useJoinRequest(): UseJoinRequestResult {
+export function useJoinRequest(refreshStatus?: () => void): UseJoinRequestResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { notifySuccess, notifyError } = useNotifications()
 
-  const submitRequest = useCallback(async (eventId: number, message?: string): Promise<boolean> => {
+  /*const submitRequest = useCallback(async (eventId: number, message?: string): Promise<boolean> => {
     setLoading(true)
     setError(null)
 
@@ -40,7 +40,42 @@ export function useJoinRequest(): UseJoinRequestResult {
     } finally {
       setLoading(false)
     }
-  }, [notifySuccess, notifyError])
+  }, [notifySuccess, notifyError])*/
+  const submitRequest = useCallback(async (eventId: number, message?: string): Promise<boolean> => {
+    setLoading(true)
+    setError(null)
+  
+    try {
+      // ✅ 1. 乐观更新：先刷新状态（UI秒变pending）
+      refreshStatus?.();
+  
+      const result = await submitJoinRequest(eventId, message)
+  
+      if (result.success) {
+        notifySuccess('Join request submitted successfully! The host will review your request.')
+        // ✅ 2. 成功后再确保状态同步
+        refreshStatus?.();
+        return true
+      } else {
+        const errorMessage = result.error || 'Failed to submit join request'
+        setError(errorMessage)
+        notifyError(errorMessage)
+        // ❌ 插入失败，回退状态
+        refreshStatus?.();
+        return false
+      }
+    } catch (err) {
+      const errorMessage = 'Network error occurred'
+      setError(errorMessage)
+      notifyError(errorMessage)
+      // ❌ 网络失败，回退状态
+      refreshStatus?.();
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [notifySuccess, notifyError, refreshStatus])
+  
 
   const withdrawRequest = useCallback(async (requestId: number): Promise<boolean> => {
     setLoading(true)

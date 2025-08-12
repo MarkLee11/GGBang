@@ -2,8 +2,12 @@ import React, { useState } from 'react'
 import { Users, Clock, CheckCircle, XCircle, MessageCircle, Calendar, AlertCircle } from 'lucide-react'
 import { useEventRequests } from '../hooks/useEventRequests'
 import { useHostActions } from '../hooks/useJoinRequest'
+import { useEventAttendees } from '../hooks/useEventAttendees'
+import { useEventActions } from '../hooks/useEventActions'
 import { formatEventDate } from '../utils/dateUtils'
 import { ProfileCard } from './ProfileCard'
+import { CompactProfileCard } from './CompactProfileCard'
+import { UserProfileModal } from './UserProfileModal'
 
 interface HostRequestsPanelProps {
   eventId: number
@@ -27,10 +31,16 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
     clearErrors 
   } = useHostActions()
   
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const { attendees, loading: attendeesLoading, error: attendeesError, refreshAttendees } = useEventAttendees(eventId, isHost)
+  const { removeAttendee, loading: actionLoading } = useEventActions()
+  
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'attendees'>('pending')
   const [actioningRequestId, setActioningRequestId] = useState<number | null>(null)
   const [rejectNote, setRejectNote] = useState('')
   const [showRejectModal, setShowRejectModal] = useState<number | null>(null)
+  const [showRemoveConfirmation, setShowRemoveConfirmation] = useState<{ userId: string; userName: string } | null>(null)
+  const [selectedProfile, setSelectedProfile] = useState<any>(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
 
   // Debug logging
   console.log('🔍 HostRequestsPanel Debug:', {
@@ -50,12 +60,14 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
     const success = await approve(requestId)
     
     if (success) {
-      await refreshRequests()
+      await Promise.all([refreshRequests(), refreshAttendees()])
       onRequestUpdate?.()
     }
     
+    
     setActioningRequestId(null)
   }
+  
 
   const handleReject = async (requestId: number) => {
     setActioningRequestId(requestId)
@@ -71,6 +83,17 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
     }
     
     setActioningRequestId(null)
+  }
+
+  const handleRemoveAttendee = async (userId: string) => {
+    if (!eventId) return
+    
+    const success = await removeAttendee(eventId, userId)
+    if (success) {
+      await refreshAttendees()
+      onRequestUpdate?.()
+      setShowRemoveConfirmation(null)
+    }
   }
 
   const openRejectModal = (requestId: number) => {
@@ -202,8 +225,13 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
 
       {/* Tab Navigation */}
       <div className="flex space-x-1 bg-gray-800/50 rounded-lg p-1">
-        {(['pending', 'approved', 'rejected'] as const).map((tab) => {
-          const count = requests.filter(r => r.status === tab).length
+        {(['pending', 'approved', 'rejected', 'attendees'] as const).map((tab) => {
+          let count = 0
+          if (tab === 'attendees') {
+            count = attendees.length
+          } else {
+            count = requests.filter(r => r.status === tab).length
+          }
           return (
             <button
               key={tab}
@@ -214,7 +242,7 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
                   : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
               }`}
             >
-              {tab} ({count})
+              {tab === 'attendees' ? 'Attendees' : tab} ({count})
             </button>
           )
         })}
@@ -229,27 +257,106 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
         </div>
       )}
 
-      {/* Request List */}
-      <div className="space-y-4">
-        {filteredRequests.length === 0 ? (
-          <div className="text-center py-8">
-            <MessageCircle size={48} className="text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">
-              No {activeTab} requests yet.
-            </p>
-          </div>
-        ) : (
-          filteredRequests.map((request) => (
+      {/* Content based on active tab */}
+      {activeTab === 'attendees' ? (
+        // Attendees Tab
+        <div className="space-y-4">
+          {attendeesLoading ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-gray-400">Loading attendees...</p>
+            </div>
+          ) : attendeesError ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-red-400 mb-4">Error loading attendees: {attendeesError}</p>
+              <button 
+                onClick={() => refreshAttendees()}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : attendees.length === 0 ? (
+            <div className="text-center py-8">
+              <Users size={48} className="text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">No attendees yet.</p>
+            </div>
+          ) : (
+            attendees.map((attendee) => (
+              <div
+                key={attendee.id}
+                className="border border-green-500/20 bg-green-500/10 rounded-lg p-4"
+              >
+                <div className="space-y-4">
+                  {/* Profile Card */}
+                  <CompactProfileCard
+                    profile={attendee.profiles}
+                    canViewSensitive={true}
+                    onProfileClick={() => {
+                      setSelectedProfile(attendee.profiles)
+                      setShowProfileModal(true)
+                    }}
+                  />
+
+                  {/* Attendee Details */}
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-2">
+                      <Calendar size={12} className="text-gray-400" />
+                      <span className="text-gray-400">
+                        Joined {formatEventDate(attendee.created_at.split('T')[0])}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle size={16} className="text-green-400" />
+                      <span className="text-green-400">Attending</span>
+                    </div>
+                  </div>
+
+                  {/* Remove Button */}
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={() => setShowRemoveConfirmation({
+                        userId: attendee.user_id,
+                        userName: attendee.profiles?.display_name || 'this attendee'
+                      })}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      <XCircle size={16} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        // Requests Tabs (pending, approved, rejected)
+        <div className="space-y-4">
+          {filteredRequests.length === 0 ? (
+            <div className="text-center py-8">
+              <MessageCircle size={48} className="text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">
+                No {activeTab} requests yet.
+              </p>
+            </div>
+          ) : (
+            filteredRequests.map((request) => (
             <div
               key={request.id}
               className={`border rounded-lg p-4 ${getStatusColor(request.status)}`}
             >
               <div className="space-y-4">
                 {/* Profile Card with Sensitive Info Access */}
-                <ProfileCard
+                <CompactProfileCard
                   profile={request.profiles}
                   canViewSensitive={true} // Host can view sensitive info when reviewing requests
-                  compact={false}
+                  onProfileClick={() => {
+                    setSelectedProfile(request.profiles)
+                    setShowProfileModal(true)
+                  }}
                 />
 
                 {/* Request Message */}
@@ -334,7 +441,8 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
             </div>
           ))
         )}
-      </div>
+        </div>
+      )}
 
       {/* Reject Modal */}
       {showRejectModal && (
@@ -375,6 +483,51 @@ export const HostRequestsPanel: React.FC<HostRequestsPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* Remove Attendee Confirmation Modal */}
+      {showRemoveConfirmation && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-2xl max-w-md w-full border border-gray-700 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                <XCircle size={20} className="text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Remove Attendee</h3>
+            </div>
+            
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to remove <span className="font-medium text-white">{showRemoveConfirmation.userName}</span> from this event? This action cannot be undone.
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowRemoveConfirmation(null)}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRemoveAttendee(showRemoveConfirmation.userId)}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {actionLoading ? 'Removing...' : 'Yes, Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => {
+          setShowProfileModal(false)
+          setSelectedProfile(null)
+        }}
+        profile={selectedProfile}
+        canViewSensitive={true}
+      />
     </div>
   )
 }

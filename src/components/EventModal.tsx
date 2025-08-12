@@ -7,9 +7,14 @@ import { unlockEventLocation } from '../lib/api'
 //import { useUserEventStatus } from '../hooks/useUserEventStatus'//
 import { useEventStatus } from '../hooks/useEventStatus'
 import { useJoinRequest } from '../hooks/useJoinRequest'
+import { useEventActions } from '../hooks/useEventActions'
+import { useEventAttendees } from '../hooks/useEventAttendees'
+import { useHostProfile } from '../hooks/useHostProfile'
 import { JoinRequestModal } from './JoinRequestModal'
 import { HostRequestsPanel } from './HostRequestsPanel'
 import { UserStatusBadge, JoinButton } from './UserStatusBadge'
+import { CompactProfileCard } from './CompactProfileCard'
+import { UserProfileModal } from './UserProfileModal'
 
 interface EventModalProps {
   isOpen: boolean
@@ -35,19 +40,25 @@ const EventModal: React.FC<EventModalProps> = ({
   const [isJoinRequestModalOpen, setIsJoinRequestModalOpen] = useState(false)
   const [unlockingLocation, setUnlockingLocation] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
+  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false)
+  const [showHostProfileModal, setShowHostProfileModal] = useState(false)
 
   const isHost = user && event?.user_id === user.id
 
   // 使用改进后的hook
   //const { status: userStatus, loading: statusLoading, refreshStatus, requestId } = useUserEventStatus(event?.id || null)
   const { status: userStatus, loading: statusLoading, refreshStatus, requestId } = useEventStatus(event?.id || null)
-  const { withdrawRequest } = useJoinRequest()
+  const { withdrawRequest } = useJoinRequest(refreshStatus)
+  const { cancelParticipation, loading: actionLoading } = useEventActions()
+  const { hostProfile, loading: hostProfileLoading } = useHostProfile(event?.id || null)
 
   useEffect(() => {
     if (!isOpen) {
       setActiveTab('details')
       setIsJoinRequestModalOpen(false)
       setUnlockError(null)
+      setShowCancelConfirmation(false)
+      setShowHostProfileModal(false)
     }
   }, [isOpen])
 
@@ -94,6 +105,18 @@ const EventModal: React.FC<EventModalProps> = ({
   const handleHostActionSuccess = () => {
     refreshStatus?.()
     onAttendanceChanged?.()
+  }
+
+  // Handle cancel participation
+  const handleCancelParticipation = async () => {
+    if (!event) return
+    
+    const success = await cancelParticipation(event.id)
+    if (success) {
+      refreshStatus?.()
+      onAttendanceChanged?.()
+      setShowCancelConfirmation(false)
+    }
   }
 
   // Handle withdraw request
@@ -158,7 +181,7 @@ const EventModal: React.FC<EventModalProps> = ({
               )}
               
               {/* Join Button */}
-              {user && !isHost && (
+              {user && !isHost && userStatus !== 'attending' && (
                 <JoinButton
                   status={userStatus}
                   onRequestClick={() => setIsJoinRequestModalOpen(true)}
@@ -167,6 +190,17 @@ const EventModal: React.FC<EventModalProps> = ({
                   isAuthenticated={!!user}
                   requestId={requestId}
                 />
+              )}
+              
+              {/* Cancel Participation Button */}
+              {user && !isHost && userStatus === 'attending' && (
+                <button
+                  onClick={() => setShowCancelConfirmation(true)}
+                  disabled={actionLoading}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel Participation
+                </button>
               )}
               
               {/* Close Button */}
@@ -325,15 +359,31 @@ const EventModal: React.FC<EventModalProps> = ({
                     <User size={20} className="text-purple-400" />
                     <span>Host</span>
                   </h3>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
-                      <User size={20} className="text-white" />
+                  {hostProfileLoading ? (
+                    <div className="flex items-center space-x-3">
+                      <div className="w-16 h-16 bg-gray-700 rounded-full animate-pulse"></div>
+                      <div className="space-y-2">
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-32"></div>
+                        <div className="h-3 bg-gray-700 rounded animate-pulse w-24"></div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white font-medium">Event Host</p>
-                      <p className="text-gray-400 text-sm">Organized this event</p>
+                  ) : hostProfile ? (
+                    <CompactProfileCard
+                      profile={hostProfile}
+                      canViewSensitive={false}
+                      onProfileClick={() => setShowHostProfileModal(true)}
+                    />
+                  ) : (
+                    <div className="flex items-center space-x-3">
+                      <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
+                        <User size={24} className="text-white" />
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">Event Host</p>
+                        <p className="text-gray-400 text-sm">Organized this event</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -346,6 +396,50 @@ const EventModal: React.FC<EventModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Host Profile Modal */}
+      {showHostProfileModal && hostProfile && (
+        <UserProfileModal
+          isOpen={showHostProfileModal}
+          onClose={() => setShowHostProfileModal(false)}
+          profile={hostProfile}
+          canViewSensitive={false}
+        />
+      )}
+
+      {/* Cancel Participation Confirmation Modal */}
+      {showCancelConfirmation && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-2xl max-w-md w-full border border-gray-700 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                <X size={20} className="text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Cancel Participation</h3>
+            </div>
+            
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to cancel your participation in this event? This action cannot be undone.
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowCancelConfirmation(false)}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              >
+                Keep Participation
+              </button>
+              <button
+                onClick={handleCancelParticipation}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {actionLoading ? 'Canceling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Join Request Modal */}
       <JoinRequestModal

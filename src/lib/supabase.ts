@@ -66,3 +66,6 @@ export async function getCurrentUserId(): Promise<string | null> {
   return data.user.id
 }
 
+// 方便调试，把 supabase 挂到 window
+// @ts-ignore
+window.supabase = supabase;
