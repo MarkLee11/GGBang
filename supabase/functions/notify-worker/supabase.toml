@@ -1,0 +1,2 @@
+﻿[functions.notify-worker]
+ verify_jwt= true

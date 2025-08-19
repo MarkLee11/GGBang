@@ -1,0 +1,102 @@
+name: 🔔 Notify Worker Cron
+
+on:
+  schedule:
+    # 每5分钟执行一次
+    - cron: '*/5 * * * *'
+  
+  # 允许手动触发（用于测试）
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (dry run)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🚀 触发通知工作器
+        id: trigger_notify
+        run: |
+          echo "🕐 开始执行通知任务: $(date)"
+          
+          # 构建请求URL和headers
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          
+          # 检查必要参数
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || [ -z "$CRON_SECRET" ]; then
+            echo "❌ 缺少必要的环境变量"
+            echo "SUPABASE_URL: ${SUPABASE_URL:0:20}..."
+            echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:0:20}..."
+            echo "CRON_SECRET: ${CRON_SECRET:0:20}..."
+            exit 1
+          fi
+          
+          # 发送请求
+          echo "📡 发送请求到: $SUPABASE_URL/functions/v1/notify-worker"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "$SUPABASE_URL/functions/v1/notify-worker" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: GitHub-Actions-Notify-Cron/1.0")
+          
+          # 分离响应体和状态码
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+          
+          echo "📊 HTTP状态码: $HTTP_STATUS"
+          echo "📄 响应内容: $RESPONSE_BODY"
+          
+          # 检查响应状态
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ 通知任务执行成功"
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "❌ 通知任务执行失败 (HTTP $HTTP_STATUS)"
+            echo "result=failed" >> $GITHUB_OUTPUT
+            echo "status_code=$HTTP_STATUS" >> $GITHUB_OUTPUT
+          fi
+          
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      
+      - name: 📊 记录执行结果
+        if: always()
+        run: |
+          echo "📋 任务执行摘要:"
+          echo "  执行时间: $(date)"
+          echo "  执行结果: ${{ steps.trigger_notify.outputs.result }}"
+          if [ "${{ steps.trigger_notify.outputs.status_code }}" != "" ]; then
+            echo "  HTTP状态: ${{ steps.trigger_notify.outputs.status_code }}"
+          fi
+          echo "  工作流ID: ${{ github.run_id }}"
+          echo "  提交SHA: ${{ github.sha }}"
+      
+      - name: 🚨 失败通知 (可选)
+        if: failure()
+        run: |
+          echo "❌ 通知任务执行失败，请检查日志"
+          echo "🔍 查看工作流运行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # 这里可以添加更多通知逻辑，比如：
+          # - 发送Slack通知
+          # - 发送Discord通知
+          # - 发送邮件通知
+          # - 创建GitHub Issue
+      
+      - name: ✅ 成功通知 (可选)
+        if: success()
+        run: |
+          echo "🎉 通知任务执行成功"
+          echo "📊 查看工作流运行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+

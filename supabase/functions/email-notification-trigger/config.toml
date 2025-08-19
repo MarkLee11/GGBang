@@ -1,0 +1,7 @@
+[functions.email-notification-trigger]
+verify_jwt = true
+import_map = "../_shared/import_map.json"
+
+[functions.email-notification-trigger.environment]
+FRONTEND_URL = "https://localhost:5173"
+EMAIL_SENDER = "onboarding@resend.dev"

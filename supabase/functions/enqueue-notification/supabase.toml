@@ -1,0 +1,4 @@
+# === File: supabase/functions/enqueue-notification/supabase.toml ===
+[functions.enqueue-notification]
+verify_jwt = true
+
